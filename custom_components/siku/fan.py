@@ -1,24 +1,25 @@
 """Demo fan platform that has a fake fan."""
 from __future__ import annotations
-import logging
 
+import logging
 from typing import Any
 
-from homeassistant.components.fan import FanEntity, FanEntityFeature
+from homeassistant.components.fan import FanEntity
+from homeassistant.components.fan import FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util.percentage import (
-    ordered_list_item_to_percentage,
-    percentage_to_ordered_list_item,
-)
+from homeassistant.util.percentage import ordered_list_item_to_percentage
+from homeassistant.util.percentage import percentage_to_ordered_list_item
 
 from . import SikuEntity
-from .const import DOMAIN, DEFAULT_NAME
 from .api import FAN_SPEEDS
+from .const import DEFAULT_NAME
+from .const import DOMAIN
+from .coordinator import SikuDataUpdateCoordinator
 
 # from .api import SikuApi
-from .coordinator import SikuDataUpdateCoordinator
 
 LOGGER = logging.getLogger(__name__)
 

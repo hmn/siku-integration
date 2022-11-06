@@ -14,12 +14,11 @@
 [![Discord][discord-shield]][discord]
 [![Community Forum][forum-shield]][forum]
 
-
 **This component will set up the following platforms.**
 
-| Platform        | Description                                                               |
-| --------------- | ------------------------------------------------------------------------- |
-| `fan`           | Siku RV Fan                                                               |
+| Platform | Description |
+| -------- | ----------- |
+| `fan`    | Siku RV Fan |
 
 Integration for https://www.siku.at/produkte/ wifi fans
 

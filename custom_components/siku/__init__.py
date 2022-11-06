@@ -4,15 +4,17 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, DEFAULT_MANUFACTURER, DEFAULT_MODEL, DEFAULT_NAME
+from .const import DEFAULT_MANUFACTURER
+from .const import DEFAULT_MODEL
+from .const import DEFAULT_NAME
+from .const import DOMAIN
+from .coordinator import SikuDataUpdateCoordinator
 
 # from .api import SikuApi
-from .coordinator import SikuDataUpdateCoordinator
 
 PLATFORMS: list[Platform] = [Platform.FAN]
 

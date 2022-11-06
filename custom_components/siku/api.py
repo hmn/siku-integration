@@ -2,7 +2,8 @@
 import logging
 import socket
 
-from .const import PACKET_PREFIX, PACKET_POSTFIX
+from .const import PACKET_POSTFIX
+from .const import PACKET_PREFIX
 
 LOGGER = logging.getLogger(__name__)
 
