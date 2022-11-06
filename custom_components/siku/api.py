@@ -116,6 +116,7 @@ class SikuApi:
 
                 hexstring = data.hex()
                 hexlist = ["".join(x) for x in zip(*[iter(hexstring)] * 2)]
+                LOGGER.debug("returning hexlist %s", hexlist)
                 return hexlist
         except Exception as ex:
             raise Exception(
