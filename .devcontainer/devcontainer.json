@@ -9,7 +9,8 @@
     "ms-python.python",
     "github.vscode-pull-request-github",
     "ryanluker.vscode-coverage-gutters",
-    "ms-python.vscode-pylance"
+    "ms-python.vscode-pylance",
+    "GitHub.copilot"
   ],
   "settings": {
     "files.eol": "\n",

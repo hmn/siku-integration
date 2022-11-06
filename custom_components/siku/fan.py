@@ -33,10 +33,6 @@ PRESET_MODE_SMART = "smart"
 PRESET_MODE_SLEEP = "sleep"
 PRESET_MODE_ON = "on"
 
-FULL_SUPPORT = (
-    FanEntityFeature.SET_SPEED | FanEntityFeature.OSCILLATE | FanEntityFeature.DIRECTION
-)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -51,7 +47,6 @@ async def async_setup_entry(
                 hass.data[DOMAIN][entry.entry_id],
                 f"{entry.entry_id}",
                 DEFAULT_NAME,
-                FULL_SUPPORT,
             )
         ]
     )
@@ -60,6 +55,11 @@ async def async_setup_entry(
 class SikuFan(SikuEntity, FanEntity):
     """Siku RV Fan"""
 
+    _attr_supported_features = (
+        FanEntityFeature.SET_SPEED
+        | FanEntityFeature.OSCILLATE
+        | FanEntityFeature.DIRECTION
+    )
     _attr_has_entity_name = True
     _attr_name = None
     _attr_should_poll = True
@@ -70,24 +70,12 @@ class SikuFan(SikuEntity, FanEntity):
         coordinator: SikuDataUpdateCoordinator,
         unique_id: str,
         name: str,
-        supported_features: int,
-        preset_modes: list[str] | None = None,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
         self.hass = hass
         self._unique_id = unique_id
-        self._supported_features = supported_features
-        self._percentage: int | None = None
-        self._preset_modes = preset_modes
-        self._preset_mode: str | None = None
-        self._oscillating: bool | None = None
-        self._direction: str | None = None
         self._attr_name = name or DEFAULT_NAME
-        if supported_features & FanEntityFeature.OSCILLATE:
-            self._oscillating = True
-        if supported_features & FanEntityFeature.DIRECTION:
-            self._direction = None
 
     @property
     def unique_id(self) -> str:
@@ -95,57 +83,76 @@ class SikuFan(SikuEntity, FanEntity):
         return self._unique_id
 
     @property
-    def current_direction(self) -> str | None:
-        """Fan direction."""
-        return self._direction
-
-    @property
-    def oscillating(self) -> bool | None:
-        """Oscillating."""
-        return self._oscillating
-
-    @property
     def supported_features(self) -> int:
         """Flag supported features."""
-        return self._supported_features
-
-    @property
-    def percentage(self) -> int | None:
-        """Return the current speed percentage."""
-        return self._percentage
+        return self._attr_supported_features
 
     @property
     def speed_count(self) -> int:
         """Return the number of speeds the fan supports."""
         return len(FAN_SPEEDS)
 
+    @property
+    def percentage(self) -> int | None:
+        """Return the current speed percentage."""
+        if hasattr(self, "_attr_percentage"):
+            return self._attr_percentage
+        return 0
+
+    def set_percentage(self, percentage: int) -> None:
+        """Set the speed of the fan, as a percentage."""
+        self._attr_percentage = percentage
+
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
-        await self.coordinator.api.speed(
-            percentage_to_ordered_list_item(FAN_SPEEDS, percentage)
-        )
-        self._percentage = percentage
-        self._preset_mode = None
+        if percentage == 0:
+            await self.async_turn_off()
+        else:
+            if not self.is_on:
+                await self.async_turn_on()
+            await self.coordinator.api.speed(
+                percentage_to_ordered_list_item(FAN_SPEEDS, percentage)
+            )
+        await self.hass.async_add_executor_job(self.set_percentage, percentage)
+
+    @property
+    def oscillating(self) -> bool | None:
+        """Oscillating."""
+        return self._attr_oscillating
+
+    def oscillate(self, oscillating: bool) -> None:
+        """Oscillate the fan."""
+        self._attr_oscillating = oscillating
+        if oscillating:
+            self.set_direction(None)
+
+    async def async_oscillate(self, oscillating: bool) -> None:
+        """Set oscillation."""
+        self._attr_oscillating = oscillating
+        if oscillating:
+            if not self.is_on:
+                await self.async_turn_on()
+            await self.coordinator.api.direction("alternating")
+        else:
+            await self.coordinator.api.direction("forward")
+        await self.hass.async_add_executor_job(self.oscillate, oscillating)
         self.async_write_ha_state()
 
     @property
-    def preset_mode(self) -> str | None:
-        """Return the current preset mode, e.g., auto, smart, interval, favorite."""
-        return self._preset_mode
+    def current_direction(self) -> str | None:
+        """Fan direction."""
+        return self._attr_current_direction
 
-    @property
-    def preset_modes(self) -> list[str] | None:
-        """Return a list of available preset modes."""
-        return self._preset_modes
+    def set_direction(self, direction: str) -> None:
+        """Set the direction of the fan."""
+        self._attr_current_direction = direction
 
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
-        """Set new preset mode."""
-        if self.preset_modes is None or preset_mode not in self.preset_modes:
-            raise ValueError(
-                f"{preset_mode} is not a valid preset_mode: {self.preset_modes}"
-            )
-        self._preset_mode = preset_mode
-        self._percentage = None
+    async def async_set_direction(self, direction: str) -> None:
+        """Set the direction of the fan."""
+        await self.coordinator.api.direction(direction)
+        self.set_direction(direction)
+        if self.oscillating:
+            self.oscillate(False)
         self.async_write_ha_state()
 
     async def async_turn_on(
@@ -155,47 +162,45 @@ class SikuFan(SikuEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
-        if preset_mode:
-            await self.async_set_preset_mode(preset_mode)
-            return
-
         if percentage is None:
-            percentage = 33
+            percentage = ordered_list_item_to_percentage(FAN_SPEEDS, FAN_SPEEDS[0])
 
         await self.coordinator.api.power_on()
-        await self.async_set_percentage(percentage)
-        await self.async_oscillate(True)
+        self.set_percentage(percentage)
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
         await self.coordinator.api.power_off()
-        await self.async_oscillate(False)
-        await self.async_set_percentage(0)
-
-    async def async_set_direction(self, direction: str) -> None:
-        """Set the direction of the fan."""
-        await self.coordinator.api.direction(direction)
-        self._direction = direction
-        self._oscillating = False
+        self.set_percentage(0)
         self.async_write_ha_state()
 
-    async def async_oscillate(self, oscillating: bool) -> None:
-        """Set oscillation."""
-        if oscillating:
-            await self.coordinator.api.direction("alternating")
-        else:
-            await self.coordinator.api.direction("forward")
-        self._oscillating = oscillating
-        self._direction = None
-        self.async_write_ha_state()
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+        self._handle_coordinator_update()
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self._attr_is_on = self.coordinator.data["is_on"]
-        self._percentage = ordered_list_item_to_percentage(
-            FAN_SPEEDS, self.coordinator.data["speed"]
-        )
-        self._oscillating = self.coordinator.data["oscillating"]
-        self._direction = self.coordinator.data["direction"]
-        self.async_write_ha_state()
+        LOGGER.debug("Handling coordinator update %s", self.coordinator.data)
+        if self.coordinator.data is None:
+            return
+        if self.coordinator.data["is_on"]:
+            self.set_percentage(
+                ordered_list_item_to_percentage(
+                    FAN_SPEEDS, self.coordinator.data["speed"]
+                )
+            )
+        else:
+            self.set_percentage(0)
+        if (
+            not self.coordinator.data["oscillating"]
+            and self.coordinator.data["direction"] != "alternating"
+        ):
+            self.oscillate(False)
+            self.set_direction(self.coordinator.data["direction"])
+        else:
+            self.oscillate(True)
+
+        super()._handle_coordinator_update()
