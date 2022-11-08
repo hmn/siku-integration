@@ -19,19 +19,15 @@ from .const import DEFAULT_NAME
 from .const import DOMAIN
 from .coordinator import SikuDataUpdateCoordinator
 
-# from .api import SikuApi
-
 LOGGER = logging.getLogger(__name__)
 
 # percentage = ordered_list_item_to_percentage(FAN_SPEEDS, "01")
 # named_speed = percentage_to_ordered_list_item(FAN_SPEEDS, 33)
 
 PRESET_MODE_AUTO = "auto"
-
-PRESET_MODE_AUTO = "auto"
-PRESET_MODE_SMART = "smart"
-PRESET_MODE_SLEEP = "sleep"
 PRESET_MODE_ON = "on"
+PRESET_MODE_PARTY = "party"
+PRESET_MODE_SLEEP = "sleep"
 
 
 async def async_setup_entry(
@@ -59,7 +55,14 @@ class SikuFan(SikuEntity, FanEntity):
         FanEntityFeature.SET_SPEED
         | FanEntityFeature.OSCILLATE
         | FanEntityFeature.DIRECTION
+        | FanEntityFeature.PRESET_MODE
     )
+    _attr_preset_modes = [
+        PRESET_MODE_AUTO,
+        PRESET_MODE_ON,
+        PRESET_MODE_PARTY,
+        PRESET_MODE_SLEEP,
+    ]
     _attr_has_entity_name = True
     _attr_name = None
     _attr_should_poll = True
@@ -83,42 +86,36 @@ class SikuFan(SikuEntity, FanEntity):
         return self._unique_id
 
     @property
-    def supported_features(self) -> int:
-        """Flag supported features."""
-        return self._attr_supported_features
-
-    @property
     def speed_count(self) -> int:
         """Return the number of speeds the fan supports."""
         return len(FAN_SPEEDS)
 
-    @property
-    def percentage(self) -> int | None:
-        """Return the current speed percentage."""
-        if hasattr(self, "_attr_percentage"):
-            return self._attr_percentage
-        return 0
-
     def set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
         self._attr_percentage = percentage
+        if percentage == 0:
+            self.set_preset_mode(None)
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
         if percentage == 0:
-            await self.async_turn_off()
+            await self.coordinator.api.power_off()
+            await self.hass.async_add_executor_job(self.set_preset_mode, None)
         else:
-            if not self.is_on:
-                await self.async_turn_on()
+            await self.coordinator.api.power_on()
             await self.coordinator.api.speed(
                 percentage_to_ordered_list_item(FAN_SPEEDS, percentage)
             )
+            if self.oscillating:
+                await self.hass.async_add_executor_job(
+                    self.set_preset_mode, PRESET_MODE_AUTO
+                )
+            else:
+                await self.hass.async_add_executor_job(
+                    self.set_preset_mode, PRESET_MODE_ON
+                )
         await self.hass.async_add_executor_job(self.set_percentage, percentage)
-
-    @property
-    def oscillating(self) -> bool | None:
-        """Oscillating."""
-        return self._attr_oscillating
+        self.async_write_ha_state()
 
     def oscillate(self, oscillating: bool) -> None:
         """Oscillate the fan."""
@@ -133,15 +130,14 @@ class SikuFan(SikuEntity, FanEntity):
             if not self.is_on:
                 await self.async_turn_on()
             await self.coordinator.api.direction("alternating")
+            await self.hass.async_add_executor_job(
+                self.set_preset_mode, PRESET_MODE_AUTO
+            )
         else:
             await self.coordinator.api.direction("forward")
+            await self.hass.async_add_executor_job(self.set_preset_mode, PRESET_MODE_ON)
         await self.hass.async_add_executor_job(self.oscillate, oscillating)
         self.async_write_ha_state()
-
-    @property
-    def current_direction(self) -> str | None:
-        """Fan direction."""
-        return self._attr_current_direction
 
     def set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
@@ -150,9 +146,10 @@ class SikuFan(SikuEntity, FanEntity):
     async def async_set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
         await self.coordinator.api.direction(direction)
-        self.set_direction(direction)
+        await self.hass.async_add_executor_job(self.set_direction, direction)
         if self.oscillating:
-            self.oscillate(False)
+            await self.hass.async_add_executor_job(self.oscillate, False)
+        await self.hass.async_add_executor_job(self.set_preset_mode, PRESET_MODE_ON)
         self.async_write_ha_state()
 
     async def async_turn_on(
@@ -165,14 +162,34 @@ class SikuFan(SikuEntity, FanEntity):
         if percentage is None:
             percentage = ordered_list_item_to_percentage(FAN_SPEEDS, FAN_SPEEDS[0])
 
-        await self.coordinator.api.power_on()
-        self.set_percentage(percentage)
+        await self.async_set_percentage(percentage)
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
-        await self.coordinator.api.power_off()
-        self.set_percentage(0)
+        await self.async_set_percentage(0)
+        self.async_write_ha_state()
+
+    def set_preset_mode(self, preset_mode: str) -> None:
+        """Set the preset mode of the fan."""
+        self._attr_preset_mode = preset_mode
+        self.schedule_update_ha_state()
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set new preset mode."""
+        if preset_mode == PRESET_MODE_PARTY:
+            await self.async_turn_on()
+            await self.coordinator.api.party()
+        elif preset_mode == PRESET_MODE_SLEEP:
+            await self.async_turn_on()
+            await self.coordinator.api.sleep()
+        elif preset_mode == PRESET_MODE_AUTO:
+            await self.async_turn_on()
+            await self.async_oscillate(True)
+        elif preset_mode == PRESET_MODE_ON:
+            await self.async_turn_on()
+            await self.async_set_direction("forward")
+        await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode)
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:

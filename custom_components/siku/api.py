@@ -85,11 +85,13 @@ class SikuApi:
 
     async def sleep(self) -> None:
         """Set fan to sleep mode"""
+        await self.power_on()
         hexlist = await self._send_command(COMMAND_SLEEP)
         return await self._translate_response(hexlist)
 
     async def party(self) -> None:
         """Set fan to party mode"""
+        await self.power_on()
         hexlist = await self._send_command(COMMAND_PARTY)
         return await self._translate_response(hexlist)
 

@@ -22,6 +22,8 @@
 
 Integration for https://www.siku.at/produkte/ wifi fans
 
+Tested on "SIKU RV 50 W Pro WIFI v1"
+
 ## Installation
 
 1. Using the tool of choice open the directory (folder) for your HA configuration (where you find `configuration.yaml`).
