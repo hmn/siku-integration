@@ -6,15 +6,18 @@ import socket
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_IP_ADDRESS, CONF_PORT, CONF_PASSWORD
+from homeassistant.const import CONF_IP_ADDRESS
+from homeassistant.const import CONF_PASSWORD
+from homeassistant.const import CONF_PORT
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.update_coordinator import UpdateFailed
-from .const import CONF_VERSION, CONF_ID
 
 from .api_v1 import SikuV1Api
 from .api_v2 import SikuV2Api
+from .const import CONF_ID
+from .const import CONF_VERSION
 
 LOGGER = logging.getLogger(__name__)
 

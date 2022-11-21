@@ -22,7 +22,16 @@
 
 Integration for https://www.siku.at/produkte/ wifi fans
 
-Tested on "SIKU RV 50 W Pro WIFI v1"
+### Tested on
+
+- "SIKU RV 50 W Pro WIFI v1"
+- ?
+
+The fan is sold under different brands, for instance :
+
+- SIKU RV
+- DUKA One
+- Oxxify.Smart 50
 
 ## Installation
 

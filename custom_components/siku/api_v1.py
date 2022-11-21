@@ -2,7 +2,9 @@
 import logging
 import socket
 
-from .const import FAN_SPEEDS, DIRECTIONS, DIRECTION_ALTERNATING
+from .const import DIRECTION_ALTERNATING
+from .const import DIRECTIONS
+from .const import FAN_SPEEDS
 
 LOGGER = logging.getLogger(__name__)
 

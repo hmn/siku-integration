@@ -2,7 +2,9 @@
 import logging
 import socket
 
-from .const import FAN_SPEEDS, DIRECTIONS, DIRECTION_ALTERNATING
+from .const import DIRECTION_ALTERNATING
+from .const import DIRECTIONS
+from .const import FAN_SPEEDS
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,13 +64,13 @@ class SikuV2Api:
     async def power_on(self) -> None:
         """Power on fan"""
         cmd = f"{COMMAND_ON_OFF}{POWER_ON}".upper()
-        hexlist = await self._send_command(FUNC_READ_WRITE, cmd)
+        await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     async def power_off(self) -> None:
         """Power off fan"""
         cmd = f"{COMMAND_ON_OFF}{POWER_OFF}".upper()
-        hexlist = await self._send_command(FUNC_READ_WRITE, cmd)
+        await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     async def speed(self, speed: str) -> None:
@@ -76,7 +78,7 @@ class SikuV2Api:
         if speed not in FAN_SPEEDS:
             raise ValueError(f"Invalid fan speed: {speed}")
         cmd = f"{COMMAND_SPEED}{speed}".upper()
-        hexlist = await self._send_command(FUNC_READ_WRITE, cmd)
+        await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     async def direction(self, direction: str) -> None:
@@ -89,7 +91,7 @@ class SikuV2Api:
         if direction not in DIRECTIONS:
             raise ValueError(f"Invalid fan direction: {direction}")
         cmd = f"{COMMAND_DIRECTION}{direction}".upper()
-        hexlist = await self._send_command(FUNC_READ_WRITE, cmd)
+        await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     async def sleep(self) -> None:

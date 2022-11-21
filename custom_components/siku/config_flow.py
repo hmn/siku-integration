@@ -6,7 +6,9 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_IP_ADDRESS, CONF_PORT, CONF_PASSWORD
+from homeassistant.const import CONF_IP_ADDRESS
+from homeassistant.const import CONF_PASSWORD
+from homeassistant.const import CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
@@ -14,7 +16,10 @@ from homeassistant.helpers import config_validation as cv
 
 from .api_v1 import SikuV1Api
 from .api_v2 import SikuV2Api
-from .const import DOMAIN, DEFAULT_PORT, CONF_VERSION, CONF_ID
+from .const import CONF_ID
+from .const import CONF_VERSION
+from .const import DEFAULT_PORT
+from .const import DOMAIN
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
