@@ -2,23 +2,16 @@
 import logging
 import socket
 
-from .const import PACKET_POSTFIX
-from .const import PACKET_PREFIX
+from .const import FAN_SPEEDS, DIRECTIONS, DIRECTION_ALTERNATING
 
 LOGGER = logging.getLogger(__name__)
 
-FAN_SPEEDS = ["01", "02", "03"]
 # forward = pull air out of the room
 # reverse = pull air into the room from outside
 # alternating = change directions (used for oscilating option in fan)
-DIRECTION_FORWARD = "00"
-DIRECTION_ALTERNATING = "01"
-DIRECTION_REVERSE = "02"
-DIRECTIONS = {
-    DIRECTION_FORWARD: "forward",
-    DIRECTION_ALTERNATING: "alternating",
-    DIRECTION_REVERSE: "reverse",
-}
+PACKET_PREFIX = bytes.fromhex("6d6f62696c65")
+PACKET_POSTFIX = bytes.fromhex("0d0a")
+
 COMMAND_STATUS = "01"
 COMMAND_DIRECTION = "06"
 COMMAND_SPEED = "04"
@@ -33,7 +26,7 @@ RESULT_POWER_ON = "01"
 RESULT_POWER_OFF = "00"
 
 
-class SikuApi:
+class SikuV1Api:
     """Handle requests to the fan controller."""
 
     def __init__(self, host: str, port: int) -> None:
@@ -102,28 +95,23 @@ class SikuApi:
         # enter the data content of the UDP packet as hex
         packet_data = PACKET_PREFIX + packet_command + PACKET_POSTFIX
 
-        try:
-            # initialize a socket, think of it as a cable
-            # SOCK_DGRAM specifies that this is UDP
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
-                s.settimeout(10)
+        # initialize a socket, think of it as a cable
+        # SOCK_DGRAM specifies that this is UDP
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
+            s.settimeout(10)
 
-                server_address = (self.host, self.port)
-                LOGGER.debug('sending "%s" to %s', packet_data, server_address)
-                s.sendto(packet_data, server_address)
+            server_address = (self.host, self.port)
+            LOGGER.debug('sending "%s" to %s', packet_data, server_address)
+            s.sendto(packet_data, server_address)
 
-                # Receive response
-                data, server = s.recvfrom(4096)
-                LOGGER.debug('received "%s" from %s', data, server)
+            # Receive response
+            data, server = s.recvfrom(4096)
+            LOGGER.debug('received "%s" from %s', data, server)
 
-                hexstring = data.hex()
-                hexlist = ["".join(x) for x in zip(*[iter(hexstring)] * 2)]
-                LOGGER.debug("returning hexlist %s", hexlist)
-                return hexlist
-        except Exception as ex:
-            raise Exception(
-                f"Error sending command to fan controller: {str(ex)}"
-            ) from ex
+            hexstring = data.hex()
+            hexlist = ["".join(x) for x in zip(*[iter(hexstring)] * 2)]
+            LOGGER.debug("returning hexlist %s", hexlist)
+            return hexlist
 
     async def _translate_response(self, hexlist: list[str]) -> dict:
         """Translate response from fan controller."""

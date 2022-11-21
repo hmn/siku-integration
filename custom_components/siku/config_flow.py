@@ -6,20 +6,23 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST
-from homeassistant.const import CONF_PORT
+from homeassistant.const import CONF_IP_ADDRESS, CONF_PORT, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 
-from .api import SikuApi
-from .const import DEFAULT_PORT
-from .const import DOMAIN
+from .api_v1 import SikuV1Api
+from .api_v2 import SikuV2Api
+from .const import DOMAIN, DEFAULT_PORT, CONF_VERSION, CONF_ID
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST): str,
-        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Required(CONF_IP_ADDRESS): cv.string,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): cv.port,
+        vol.Required(CONF_VERSION, default=2): vol.In([1, 2]),
+        vol.Optional(CONF_ID): cv.string,
+        vol.Optional(CONF_PASSWORD): cv.string,
     }
 )
 
@@ -31,12 +34,17 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    siku_api = SikuApi(data[CONF_HOST], data[CONF_PORT])
-    if not await siku_api.status():
+    if data[CONF_VERSION] == 1:
+        api = SikuV1Api(data[CONF_IP_ADDRESS], data[CONF_PORT])
+    else:
+        api = SikuV2Api(
+            data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_ID], data[CONF_PASSWORD]
+        )
+    if not await api.status():
         raise CannotConnect
 
     # Return info that you want to store in the config entry.
-    title = f"{data[CONF_HOST]}:{data[CONF_PORT]}"
+    title = f"{data[CONF_IP_ADDRESS]}:{data[CONF_PORT]}"
     return {"title": title}
 
 
@@ -57,6 +65,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         try:
             info = await validate_input(self.hass, user_input)
+        except (ValueError, KeyError):
+            errors["base"] = "value_error"
+        except TimeoutError:
+            errors["base"] = "timeout_error"
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:

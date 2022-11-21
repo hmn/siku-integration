@@ -4,6 +4,8 @@
       "already_configured": "Device is already configured"
     },
     "error": {
+      "value_error": "Incorrect values defined in form",
+      "timeout_error": "Timeout error, failed to get status",
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
       "unknown": "Unexpected error"
@@ -11,8 +13,11 @@
     "step": {
       "user": {
         "data": {
-          "host": "Host",
-          "port": "Port"
+          "ip_address": "IP Address",
+          "port": "Port",
+          "version": "Hardware Version",
+          "idnum": "Fan ID (only v2)",
+          "password": "Fan Password (only v2)"
         }
       }
     }

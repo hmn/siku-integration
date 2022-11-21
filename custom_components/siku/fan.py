@@ -14,9 +14,7 @@ from homeassistant.util.percentage import ordered_list_item_to_percentage
 from homeassistant.util.percentage import percentage_to_ordered_list_item
 
 from . import SikuEntity
-from .api import FAN_SPEEDS
-from .const import DEFAULT_NAME
-from .const import DOMAIN
+from .const import DEFAULT_NAME, FAN_SPEEDS, DOMAIN
 from .coordinator import SikuDataUpdateCoordinator
 
 LOGGER = logging.getLogger(__name__)

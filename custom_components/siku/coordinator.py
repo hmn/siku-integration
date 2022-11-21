@@ -6,14 +6,15 @@ import socket
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
-from homeassistant.const import CONF_PORT
+from homeassistant.const import CONF_IP_ADDRESS, CONF_PORT, CONF_PASSWORD
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from .const import CONF_VERSION, CONF_ID
 
-from .api import SikuApi
+from .api_v1 import SikuV1Api
+from .api_v2 import SikuV2Api
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +33,15 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=30),
         )
         self.config_entry = entry
-        self.api = SikuApi(entry.data[CONF_HOST], entry.data[CONF_PORT])
+        if entry.data[CONF_VERSION] == 1:
+            self.api = SikuV1Api(entry.data[CONF_IP_ADDRESS], entry.data[CONF_PORT])
+        else:
+            self.api = SikuV2Api(
+                entry.data[CONF_IP_ADDRESS],
+                entry.data[CONF_PORT],
+                entry.data[CONF_ID],
+                entry.data[CONF_PASSWORD],
+            )
 
     async def _async_update_data(self) -> dict[Platform, dict[str, int | str]]:
         """Get the latest data from Siku fan and updates the state."""
