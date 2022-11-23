@@ -1,4 +1,4 @@
-# Siku RV Fan integration
+# Siku Fan integration
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
@@ -18,11 +18,21 @@
 
 | Platform | Description |
 | -------- | ----------- |
-| `fan`    | Siku RV Fan |
+| `fan`    | Siku Fan    |
 
 Integration for https://www.siku.at/produkte/ wifi fans
 
-Tested on "SIKU RV 50 W Pro WIFI v1"
+### Tested on
+
+- "Siku RV 50 W Pro WIFI v1"
+- ?
+
+The fan is sold under different brands, for instance :
+
+- Siku RV
+- SIKU TwinFresh
+- DUKA One
+- Oxxify
 
 ## Installation
 
@@ -32,7 +42,7 @@ Tested on "SIKU RV 50 W Pro WIFI v1"
 4. Download _all_ the files from the `custom_components/siku/` directory (folder) in this repository.
 5. Place the files you downloaded in the new directory (folder) you created.
 6. Restart Home Assistant
-7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Siku RV Fan integration"
+7. In the HA UI go to "Configuration" -> "Integrations" click "+" and search for "Siku Fan integration"
 
 Using your HA configuration directory (folder) as a starting point you should now also have this:
 

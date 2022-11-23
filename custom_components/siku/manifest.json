@@ -1,6 +1,6 @@
 {
   "domain": "siku",
-  "name": "Siku RV Fan",
+  "name": "Siku Fan",
   "config_flow": true,
   "documentation": "https://github.com/hmn/hacs-siku-integration",
   "issue_tracker": "https://github.com/hmn/hacs-siku-integration/issues",
@@ -11,5 +11,5 @@
   "dependencies": [],
   "codeowners": ["@hmn"],
   "iot_class": "local_polling",
-  "version": "1.0.2"
+  "version": "2.0.0"
 }
