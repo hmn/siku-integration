@@ -1,4 +1,4 @@
-"""Constants for the Siku RV Fan integration."""
+"""Constants for the Siku Fan integration."""
 
 DOMAIN = "siku"
 DEFAULT_MANUFACTURER = "Siku"
@@ -18,3 +18,8 @@ DIRECTIONS = {
     DIRECTION_ALTERNATING: "alternating",
     DIRECTION_REVERSE: "reverse",
 }
+
+PRESET_MODE_AUTO = "auto"
+PRESET_MODE_ON = "on"
+PRESET_MODE_PARTY = "party"
+PRESET_MODE_SLEEP = "sleep"

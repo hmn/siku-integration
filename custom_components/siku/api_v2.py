@@ -5,6 +5,9 @@ import socket
 from .const import DIRECTION_ALTERNATING
 from .const import DIRECTIONS
 from .const import FAN_SPEEDS
+from .const import PRESET_MODE_AUTO
+from .const import PRESET_MODE_PARTY
+from .const import PRESET_MODE_SLEEP
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +35,7 @@ COMMAND_ON_OFF = "01"
 COMMAND_SPEED = "02"
 COMMAND_DIRECTION = "B7"
 COMMAND_DEVICE_TYPE = "B9"
+COMMAND_MODE = "07"
 
 COMMAND_FUNCTION_R = "01"
 COMMAND_FUNCTION_W = "02"
@@ -42,6 +46,15 @@ COMMAND_FUNCTION_DEC = "05"
 POWER_OFF = "00"
 POWER_ON = "01"
 POWER_TOGGLE = "02"
+
+MODE_OFF = "01"
+MODE_SLEEP = "01"
+MODE_PARTY = "02"
+MODES = {
+    MODE_OFF: PRESET_MODE_AUTO,
+    MODE_SLEEP: PRESET_MODE_SLEEP,
+    MODE_PARTY: PRESET_MODE_PARTY,
+}
 
 
 class SikuV2Api:
@@ -56,7 +69,7 @@ class SikuV2Api:
 
     async def status(self) -> dict:
         """Get status from fan controller."""
-        cmd = f"{COMMAND_DEVICE_TYPE}{COMMAND_ON_OFF}{COMMAND_SPEED}{COMMAND_DIRECTION}".upper()
+        cmd = f"{COMMAND_DEVICE_TYPE}{COMMAND_ON_OFF}{COMMAND_SPEED}{COMMAND_DIRECTION}{COMMAND_MODE}".upper()
         hexlist = await self._send_command(FUNC_READ, cmd)
         data = await self._parse_response(hexlist)
         return await self._translate_response(data)
@@ -96,14 +109,14 @@ class SikuV2Api:
 
     async def sleep(self) -> None:
         """Set fan to sleep mode"""
-        await self.power_on()
-        # TODO: implement sleep mode
+        cmd = f"{COMMAND_ON_OFF}{POWER_ON}{COMMAND_MODE}{MODE_SLEEP}".upper()
+        await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     async def party(self) -> None:
         """Set fan to party mode"""
-        await self.power_on()
-        # TODO: implement party mode
+        cmd = f"{COMMAND_ON_OFF}{POWER_ON}{COMMAND_MODE}{MODE_PARTY}".upper()
+        await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     def _checksum(self, data: str) -> str:
@@ -192,25 +205,29 @@ class SikuV2Api:
         """Translate response data to dict."""
         LOGGER.debug("translate response: %s", data)
         try:
-            is_on = True if data[COMMAND_ON_OFF] == POWER_ON else False
+            is_on = bool(data[COMMAND_ON_OFF] == POWER_ON)
         except KeyError:
             is_on = False
         try:
-            speed = int(data[COMMAND_SPEED], 16)
+            speed = f"{int(data[COMMAND_SPEED], 16):02}"
         except KeyError:
-            speed = 0
+            speed = "00"
         try:
             direction = DIRECTIONS[data[COMMAND_DIRECTION]]
-            oscillating = True if direction == DIRECTION_ALTERNATING else False
+            oscillating = bool(direction == DIRECTION_ALTERNATING)
         except KeyError:
             direction = None
             oscillating = True
+        try:
+            mode = MODES[data[COMMAND_MODE]]
+        except KeyError:
+            mode = PRESET_MODE_AUTO
         return {
             "is_on": is_on,
             "speed": speed,
             "oscillating": oscillating,
             "direction": direction,
-            "mode": None,  # TODO: implement
+            "mode": mode,
         }
 
     async def _parse_response(self, hexlist: list[str]) -> dict:

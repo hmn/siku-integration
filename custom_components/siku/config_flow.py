@@ -1,4 +1,4 @@
-"""Config flow for Siku RV Fan integration."""
+"""Config flow for Siku Fan integration."""
 from __future__ import annotations
 
 import logging
@@ -54,7 +54,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Siku RV Fan."""
+    """Handle a config flow for Siku Fan."""
 
     VERSION = 1
 

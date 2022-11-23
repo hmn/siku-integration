@@ -2,7 +2,7 @@
   "_template": "gh:oncleben31/cookiecutter-homeassistant-custom-component",
   "class_name_prefix": "Siku",
   "domain_name": "siku",
-  "friendly_name": "Siku RV Fan integration",
+  "friendly_name": "Siku Fan",
   "github_user": "hmn",
   "project_name": "hacs-siku-integration",
   "test_suite": "yes",

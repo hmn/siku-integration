@@ -17,6 +17,10 @@ from . import SikuEntity
 from .const import DEFAULT_NAME
 from .const import DOMAIN
 from .const import FAN_SPEEDS
+from .const import PRESET_MODE_AUTO
+from .const import PRESET_MODE_ON
+from .const import PRESET_MODE_PARTY
+from .const import PRESET_MODE_SLEEP
 from .coordinator import SikuDataUpdateCoordinator
 
 LOGGER = logging.getLogger(__name__)
@@ -24,18 +28,13 @@ LOGGER = logging.getLogger(__name__)
 # percentage = ordered_list_item_to_percentage(FAN_SPEEDS, "01")
 # named_speed = percentage_to_ordered_list_item(FAN_SPEEDS, 33)
 
-PRESET_MODE_AUTO = "auto"
-PRESET_MODE_ON = "on"
-PRESET_MODE_PARTY = "party"
-PRESET_MODE_SLEEP = "sleep"
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Siku RV fan."""
+    """Set up the Siku fan."""
     async_add_entities(
         [
             SikuFan(
@@ -49,7 +48,7 @@ async def async_setup_entry(
 
 
 class SikuFan(SikuEntity, FanEntity):
-    """Siku RV Fan"""
+    """Siku Fan"""
 
     _attr_supported_features = (
         FanEntityFeature.SET_SPEED

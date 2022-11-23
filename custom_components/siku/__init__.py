@@ -1,4 +1,4 @@
-"""The Siku RV Fan integration."""
+"""The Siku Fan integration."""
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
@@ -17,7 +17,7 @@ PLATFORMS: list[Platform] = [Platform.FAN]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Siku RV Fan from a config entry."""
+    """Set up Siku Fan from a config entry."""
 
     coordinator = SikuDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
