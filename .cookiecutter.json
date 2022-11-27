@@ -4,7 +4,7 @@
   "domain_name": "siku",
   "friendly_name": "Siku Fan",
   "github_user": "hmn",
-  "project_name": "hacs-siku-integration",
+  "project_name": "siku-integration",
   "test_suite": "yes",
   "version": "1.0.0"
 }
