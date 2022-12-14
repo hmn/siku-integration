@@ -1,4 +1,4 @@
-homeassistant==2022.12.3
+homeassistant==2022.12.5
 pre-commit==2.20.0
 flake8==6.0.0
 reorder-python-imports==3.9.0
