@@ -1,5 +1,6 @@
 homeassistant==2022.12.6
-pre-commit==2.20.0
-flake8==6.0.0
-reorder-python-imports==3.9.0
+pre-commit
+black
+flake8
+reorder-python-imports
 pur
