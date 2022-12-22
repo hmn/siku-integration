@@ -1,4 +1,4 @@
-homeassistant==2022.12.7
+homeassistant==2022.12.8
 pre-commit
 black
 flake8
