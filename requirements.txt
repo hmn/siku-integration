@@ -1,0 +1,5 @@
+colorlog
+homeassistant
+pip
+ruff
+git+https://github.com/boto/botocore

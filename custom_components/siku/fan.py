@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.percentage import ordered_list_item_to_percentage
 from homeassistant.util.percentage import percentage_to_ordered_list_item
+from homeassistant.helpers.entity import DeviceInfo
 
 from . import SikuEntity
 from .const import DEFAULT_NAME
@@ -22,6 +23,9 @@ from .const import PRESET_MODE_ON
 from .const import PRESET_MODE_PARTY
 from .const import PRESET_MODE_SLEEP
 from .coordinator import SikuDataUpdateCoordinator
+from .const import DEFAULT_MANUFACTURER
+from .const import DEFAULT_MODEL
+from .const import DEFAULT_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -77,7 +81,9 @@ class SikuFan(SikuEntity, FanEntity):
         super().__init__(coordinator)
         self.hass = hass
         self._unique_id = unique_id
-        self._attr_name = name or DEFAULT_NAME
+        if name is None:
+            name = {DEFAULT_NAME}
+        self._attr_name = f"{name} {coordinator.api.host}"
 
     @property
     def unique_id(self) -> str:

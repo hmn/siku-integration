@@ -38,16 +38,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 class SikuEntity(CoordinatorEntity[SikuDataUpdateCoordinator]):
     """Representation of a siku entity."""
-
-    _attr_has_entity_name = True
-
-    def __init__(self, coordinator: SikuDataUpdateCoordinator) -> None:
-        """Initialize a siku entity."""
-        super().__init__(coordinator)
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
-            default_manufacturer=DEFAULT_MANUFACTURER,
-            default_model=DEFAULT_MODEL,
-            default_name=DEFAULT_NAME,
-        )

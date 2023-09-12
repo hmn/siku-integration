@@ -123,14 +123,14 @@ class SikuV1Api:
             speed_value = hexlist[HEX_KEY_SPEED]
             direction_value = hexlist[HEX_KEY_DIRECTION]
         except KeyError as ex:
-            raise Exception(
+            raise ValueError(
                 f"Error translating response from fan controller: {str(ex)}"
             ) from ex
 
         return {
-            "is_on": True if power_value == RESULT_POWER_ON else False,
+            "is_on": bool(power_value == RESULT_POWER_ON),
             "speed": speed_value,
-            "oscillating": True if direction_value == DIRECTION_ALTERNATING else False,
+            "oscillating": bool(direction_value == DIRECTION_ALTERNATING),
             "direction": DIRECTIONS[direction_value]
             if direction_value != DIRECTION_ALTERNATING
             else None,
