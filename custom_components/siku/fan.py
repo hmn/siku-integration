@@ -48,7 +48,7 @@ async def async_setup_entry(
 
 
 class SikuFan(SikuEntity, FanEntity):
-    """Siku Fan"""
+    """Siku Fan."""
 
     _attr_supported_features = (
         FanEntityFeature.SET_SPEED
@@ -77,7 +77,9 @@ class SikuFan(SikuEntity, FanEntity):
         super().__init__(coordinator)
         self.hass = hass
         self._unique_id = unique_id
-        self._attr_name = name or DEFAULT_NAME
+        if name is None:
+            name = {DEFAULT_NAME}
+        self._attr_name = f"{name} {coordinator.api.host}"
 
     @property
     def unique_id(self) -> str:
@@ -159,7 +161,8 @@ class SikuFan(SikuEntity, FanEntity):
     ) -> None:
         """Turn on the entity."""
         if percentage is None:
-            percentage = ordered_list_item_to_percentage(FAN_SPEEDS, FAN_SPEEDS[0])
+            percentage = ordered_list_item_to_percentage(
+                FAN_SPEEDS, FAN_SPEEDS[0])
 
         await self.async_set_percentage(percentage)
         self.async_write_ha_state()

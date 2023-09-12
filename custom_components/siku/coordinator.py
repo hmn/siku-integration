@@ -52,6 +52,6 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             data = await self.api.status()
             # self.logger.debug(data)
-        except (socket.error, socket.timeout) as ex:
+        except (OSError, socket.timeout) as ex:
             raise UpdateFailed(f"Connection to Siku Fan failed: {ex}") from ex
         return data
