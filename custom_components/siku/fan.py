@@ -12,7 +12,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.percentage import ordered_list_item_to_percentage
 from homeassistant.util.percentage import percentage_to_ordered_list_item
-from homeassistant.helpers.entity import DeviceInfo
 
 from . import SikuEntity
 from .const import DEFAULT_NAME
@@ -23,9 +22,6 @@ from .const import PRESET_MODE_ON
 from .const import PRESET_MODE_PARTY
 from .const import PRESET_MODE_SLEEP
 from .coordinator import SikuDataUpdateCoordinator
-from .const import DEFAULT_MANUFACTURER
-from .const import DEFAULT_MODEL
-from .const import DEFAULT_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +48,7 @@ async def async_setup_entry(
 
 
 class SikuFan(SikuEntity, FanEntity):
-    """Siku Fan"""
+    """Siku Fan."""
 
     _attr_supported_features = (
         FanEntityFeature.SET_SPEED
@@ -165,7 +161,8 @@ class SikuFan(SikuEntity, FanEntity):
     ) -> None:
         """Turn on the entity."""
         if percentage is None:
-            percentage = ordered_list_item_to_percentage(FAN_SPEEDS, FAN_SPEEDS[0])
+            percentage = ordered_list_item_to_percentage(
+                FAN_SPEEDS, FAN_SPEEDS[0])
 
         await self.async_set_percentage(percentage)
         self.async_write_ha_state()

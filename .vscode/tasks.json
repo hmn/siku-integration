@@ -6,6 +6,12 @@
       "type": "shell",
       "command": "scripts/develop",
       "problemMatcher": []
+    },
+    {
+      "label": "Lint using ruff",
+      "type": "shell",
+      "command": "scripts/lint",
+      "problemMatcher": []
     }
   ]
 }

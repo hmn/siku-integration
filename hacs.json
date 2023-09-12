@@ -1,6 +1,6 @@
 {
   "name": "Siku Fan",
-  "filename": "integration_siku.zip",
+  "filename": "siku-integration.zip",
   "hide_default_branch": true,
   "render_readme": true,
   "zip_release": true

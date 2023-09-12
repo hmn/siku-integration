@@ -4,12 +4,8 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DEFAULT_MANUFACTURER
-from .const import DEFAULT_MODEL
-from .const import DEFAULT_NAME
 from .const import DOMAIN
 from .coordinator import SikuDataUpdateCoordinator
 

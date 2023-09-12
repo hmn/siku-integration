@@ -75,19 +75,19 @@ class SikuV2Api:
         return await self._translate_response(data)
 
     async def power_on(self) -> None:
-        """Power on fan"""
+        """Power on fan."""
         cmd = f"{COMMAND_ON_OFF}{POWER_ON}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     async def power_off(self) -> None:
-        """Power off fan"""
+        """Power off fan."""
         cmd = f"{COMMAND_ON_OFF}{POWER_OFF}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     async def speed(self, speed: str) -> None:
-        """Set fan speed"""
+        """Set fan speed."""
         if speed not in FAN_SPEEDS:
             raise ValueError(f"Invalid fan speed: {speed}")
         cmd = f"{COMMAND_SPEED}{speed}".upper()
@@ -95,7 +95,7 @@ class SikuV2Api:
         return await self.status()
 
     async def direction(self, direction: str) -> None:
-        """Set fan direction"""
+        """Set fan direction."""
         # if direction is in DIRECTIONS values translate it to the key value
         if direction in DIRECTIONS.values():
             direction = list(DIRECTIONS.keys())[
@@ -108,13 +108,13 @@ class SikuV2Api:
         return await self.status()
 
     async def sleep(self) -> None:
-        """Set fan to sleep mode"""
+        """Set fan to sleep mode."""
         cmd = f"{COMMAND_ON_OFF}{POWER_ON}{COMMAND_MODE}{MODE_SLEEP}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     async def party(self) -> None:
-        """Set fan to party mode"""
+        """Set fan to party mode."""
         cmd = f"{COMMAND_ON_OFF}{POWER_ON}{COMMAND_MODE}{MODE_PARTY}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
@@ -137,11 +137,11 @@ class SikuV2Api:
         return checksum == hexlist[-2] + hexlist[-1]
 
     def _hexlist(self, hexstr: str) -> list[str]:
-        """Convert hex string to list of hex strings"""
+        """Convert hex string to list of hex strings."""
         return [hexstr[i : i + 2] for i in range(0, len(hexstr), 2)]
 
     def _login_packet(self) -> str:
-        """Build initial login part of packet"""
+        """Build initial login part of packet."""
         id_hex = self.idnum.encode("utf-8").hex()
         password_size = f"{len(self.password):02x}"
         password_hex = self.password.encode("utf-8").hex()

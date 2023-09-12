@@ -42,21 +42,21 @@ class SikuV1Api:
         return await self._translate_response(hexlist)
 
     async def power_on(self) -> None:
-        """Power on fan"""
+        """Power on fan."""
         hexlist = await self._send_command(COMMAND_STATUS)
         if hexlist[HEX_KEY_POWER] != RESULT_POWER_ON:
             hexlist = await self._send_command(COMMAND_POWER)
         return await self._translate_response(hexlist)
 
     async def power_off(self) -> None:
-        """Power off fan"""
+        """Power off fan."""
         hexlist = await self._send_command(COMMAND_STATUS)
         if hexlist[HEX_KEY_POWER] != RESULT_POWER_OFF:
             hexlist = await self._send_command(COMMAND_POWER)
         return await self._translate_response(hexlist)
 
     async def speed(self, speed: str) -> None:
-        """Set fan speed"""
+        """Set fan speed."""
         if speed not in FAN_SPEEDS:
             raise ValueError(f"Invalid fan speed: {speed}")
         hexlist = await self._send_command(COMMAND_STATUS)
@@ -65,7 +65,7 @@ class SikuV1Api:
         return await self._translate_response(hexlist)
 
     async def direction(self, direction: str) -> None:
-        """Set fan direction"""
+        """Set fan direction."""
         # if direction is in DIRECTIONS values translate it to the key value
         if direction in DIRECTIONS.values():
             direction = list(DIRECTIONS.keys())[
@@ -79,13 +79,13 @@ class SikuV1Api:
         return await self._translate_response(hexlist)
 
     async def sleep(self) -> None:
-        """Set fan to sleep mode"""
+        """Set fan to sleep mode."""
         await self.power_on()
         hexlist = await self._send_command(COMMAND_SLEEP)
         return await self._translate_response(hexlist)
 
     async def party(self) -> None:
-        """Set fan to party mode"""
+        """Set fan to party mode."""
         await self.power_on()
         hexlist = await self._send_command(COMMAND_PARTY)
         return await self._translate_response(hexlist)
