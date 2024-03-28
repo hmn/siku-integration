@@ -1,7 +1,9 @@
 {
   "domain": "siku",
   "name": "Siku Fan",
-  "codeowners": ["@hmn"],
+  "codeowners": [
+    "@hmn"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/hmn/siku-integration",
@@ -10,6 +12,6 @@
   "issue_tracker": "https://github.com/hmn/siku-integration/issues",
   "requirements": [],
   "ssdp": [],
-  "version": "2.0.2",
+  "version": "2.1.0",
   "zeroconf": []
 }

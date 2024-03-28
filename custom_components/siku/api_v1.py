@@ -1,4 +1,5 @@
 """Helper api function for sending commands to the fan controller."""
+
 import logging
 import socket
 
@@ -135,4 +136,5 @@ class SikuV1Api:
             if direction_value != DIRECTION_ALTERNATING
             else None,
             "mode": mode_value,
+            "version": "1",
         }
