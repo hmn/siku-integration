@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import socket
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -52,6 +51,6 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             data = await self.api.status()
             # self.logger.debug(data)
-        except (OSError, socket.timeout) as ex:
+        except (TimeoutError, OSError) as ex:
             raise UpdateFailed(f"Connection to Siku Fan failed: {ex}") from ex
         return data
