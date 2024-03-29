@@ -40,6 +40,9 @@ COMMAND_MODE = "07"
 COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
 COMMAND_FAN1RPM = "4A"
+# Byte 1: Minutes (0...59)
+# Byte 2: Hours (0...23)
+# Byte 3: Days (0...181)
 COMMAND_FILTER_TIMER = "64"
 COMMAND_RESET_FILTER_TIMER = "65"
 COMMAND_SEARCH = "7C"
@@ -261,7 +264,13 @@ class SikuV2Api:
         except KeyError:
             rpm = 0
         try:
-            filter_timer = int(data[COMMAND_FILTER_TIMER], 16)
+            # Byte 1: Minutes (0...59)
+            # Byte 2: Hours (0...23)
+            # Byte 3: Days (0...181)
+            minutes = int(data[COMMAND_FILTER_TIMER][0:2], 16)
+            hours = int(data[COMMAND_FILTER_TIMER][2:4], 16)
+            days = int(data[COMMAND_FILTER_TIMER][4:6], 16)
+            filter_timer = int(minutes + hours * 60 + days * 24 * 60)
         except KeyError:
             filter_timer = 0
         try:

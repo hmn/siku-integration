@@ -1,4 +1,5 @@
 """Config flow for Siku Fan integration."""
+
 from __future__ import annotations
 
 import logging
@@ -41,10 +42,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """
     if data[CONF_VERSION] == 1:
         api = SikuV1Api(data[CONF_IP_ADDRESS], data[CONF_PORT])
-    else:
+    elif data[CONF_VERSION] == 2:
         api = SikuV2Api(
             data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_ID], data[CONF_PASSWORD]
         )
+    else:
+        raise ValueError("Invalid API version")
     if not await api.status():
         raise CannotConnect
 

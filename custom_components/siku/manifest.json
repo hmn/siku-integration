@@ -13,5 +13,6 @@
   "requirements": [],
   "ssdp": [],
   "version": "2.1.0",
+  "dhcp": [],
   "zeroconf": []
 }
