@@ -1,7 +1,7 @@
 // See https://aka.ms/vscode-remote/devcontainer.json for format details.
 {
   "name": "Siku Fan integration development",
-  "image": "mcr.microsoft.com/vscode/devcontainers/python:0-3.11-bullseye",
+  "image": "mcr.microsoft.com/vscode/devcontainers/python:3.12-bookworm",
   "postCreateCommand": "scripts/setup",
   "forwardPorts": [
     8123
@@ -15,19 +15,19 @@
   "customizations": {
     "vscode": {
       "extensions": [
-		"ms-python.python",
-		"github.vscode-pull-request-github",
-		"ryanluker.vscode-coverage-gutters",
-		"ms-python.vscode-pylance",
-		"GitHub.copilot"
-	],
+        "ms-python.python",
+        "github.vscode-pull-request-github",
+        "ryanluker.vscode-coverage-gutters",
+        "ms-python.vscode-pylance",
+        "GitHub.copilot",
+        "github.vscode-github-actions",
+        "charliermarsh.ruff"
+      ],
       "settings": {
         "files.eol": "\n",
         "editor.tabSize": 4,
         "python.pythonPath": "/usr/bin/python3",
         "python.analysis.autoSearchPaths": false,
-        "python.linting.pylintEnabled": true,
-        "python.linting.enabled": true,
         "editor.formatOnPaste": false,
         "editor.formatOnSave": true,
         "editor.formatOnType": true,

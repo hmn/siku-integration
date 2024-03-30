@@ -1,4 +1,5 @@
 """Helper api function for sending commands to the fan controller."""
+
 import logging
 import socket
 
@@ -35,7 +36,28 @@ COMMAND_ON_OFF = "01"
 COMMAND_SPEED = "02"
 COMMAND_DIRECTION = "B7"
 COMMAND_DEVICE_TYPE = "B9"
+COMMAND_BOOST = "06"
 COMMAND_MODE = "07"
+COMMAND_CURRENT_HUMIDITY = "25"
+COMMAND_MANUAL_SPEED = "44"
+COMMAND_FAN1RPM = "4A"
+# Byte 1: Minutes (0...59)
+# Byte 2: Hours (0...23)
+# Byte 3: Days (0...181)
+COMMAND_FILTER_TIMER = "64"
+COMMAND_RESET_FILTER_TIMER = "65"
+COMMAND_SEARCH = "7C"
+COMMAND_RUN_HOURS = "7E"
+COMMAND_RESET_ALARMS = "80"
+COMMAND_READ_ALARM = "83"
+# Byte 1: Firmware-Version (major)
+# Byte 2: Firmware-Version (minor)
+# Byte 3: Day
+# Byte 4: Month
+# Byte 5 and 6: Year
+COMMAND_READ_FIRMWARE_VERSION = "86"
+COMMAND_FILTER_ALARM = "88"
+COMMAND_FAN_TYPE = "B9"
 
 COMMAND_FUNCTION_R = "01"
 COMMAND_FUNCTION_W = "02"
@@ -69,7 +91,20 @@ class SikuV2Api:
 
     async def status(self) -> dict:
         """Get status from fan controller."""
-        cmd = f"{COMMAND_DEVICE_TYPE}{COMMAND_ON_OFF}{COMMAND_SPEED}{COMMAND_DIRECTION}{COMMAND_MODE}".upper()
+        commands = [
+            COMMAND_DEVICE_TYPE,
+            COMMAND_ON_OFF,
+            COMMAND_SPEED,
+            COMMAND_DIRECTION,
+            COMMAND_BOOST,
+            COMMAND_MODE,
+            COMMAND_CURRENT_HUMIDITY,
+            COMMAND_FAN1RPM,
+            COMMAND_FILTER_TIMER,
+            COMMAND_READ_ALARM,
+            COMMAND_READ_FIRMWARE_VERSION,
+        ]
+        cmd = "".join(commands).upper()
         hexlist = await self._send_command(FUNC_READ, cmd)
         data = await self._parse_response(hexlist)
         return await self._translate_response(data)
@@ -219,15 +254,57 @@ class SikuV2Api:
             direction = None
             oscillating = True
         try:
+            boost = bool(data[COMMAND_BOOST] != "00")
+        except KeyError:
+            boost = False
+        try:
             mode = MODES[data[COMMAND_MODE]]
         except KeyError:
             mode = PRESET_MODE_AUTO
+        try:
+            humidity = int(data[COMMAND_CURRENT_HUMIDITY], 16)
+        except KeyError:
+            humidity = None
+        try:
+            rpm = int(data[COMMAND_FAN1RPM], 16)
+        except KeyError:
+            rpm = 0
+        try:
+            # Byte 1: Minutes (0...59)
+            # Byte 2: Hours (0...23)
+            # Byte 3: Days (0...181)
+            minutes = int(data[COMMAND_FILTER_TIMER][0:2], 16)
+            hours = int(data[COMMAND_FILTER_TIMER][2:4], 16)
+            days = int(data[COMMAND_FILTER_TIMER][4:6], 16)
+            filter_timer = int(minutes + hours * 60 + days * 24 * 60)
+        except KeyError:
+            filter_timer = 0
+        try:
+            alarm = bool(data[COMMAND_READ_ALARM] != "00")
+        except KeyError:
+            alarm = False
+        try:
+            # Byte 1: Firmware-Version (major)
+            # Byte 2: Firmware-Version (minor)
+            # Byte 3: Day
+            # Byte 4: Month
+            # Byte 5 and 6: Year
+            firmware = f"{int(data[COMMAND_READ_FIRMWARE_VERSION][0], 16)}.{int(data[COMMAND_READ_FIRMWARE_VERSION][1], 16)}"
+        except KeyError:
+            firmware = None
         return {
             "is_on": is_on,
             "speed": speed,
             "oscillating": oscillating,
             "direction": direction,
+            "boost": boost,
             "mode": mode,
+            "humidity": humidity,
+            "rpm": rpm,
+            "firmware": firmware,
+            "filter_timer": filter_timer,
+            "alarm": alarm,
+            "version": "2",
         }
 
     async def _parse_response(self, hexlist: list[str]) -> dict:

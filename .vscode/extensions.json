@@ -1,5 +1,11 @@
 {
     "recommendations": [
-        "github.copilot"
+        "ms-python.python",
+        "github.vscode-pull-request-github",
+        "ryanluker.vscode-coverage-gutters",
+        "ms-python.vscode-pylance",
+        "GitHub.copilot",
+        "github.vscode-github-actions",
+        "charliermarsh.ruff"
     ]
 }

@@ -1,4 +1,5 @@
 """Demo fan platform that has a fake fan."""
+
 from __future__ import annotations
 
 import logging
@@ -25,9 +26,6 @@ from .coordinator import SikuDataUpdateCoordinator
 
 LOGGER = logging.getLogger(__name__)
 
-# percentage = ordered_list_item_to_percentage(FAN_SPEEDS, "01")
-# named_speed = percentage_to_ordered_list_item(FAN_SPEEDS, 33)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -35,15 +33,20 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Siku fan."""
+    LOGGER.debug("Setting up Siku fan")
+    LOGGER.debug("Entry: %s", entry.entry_id)
+    coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
         [
             SikuFan(
-                hass,
-                hass.data[DOMAIN][entry.entry_id],
-                f"{entry.entry_id}",
-                DEFAULT_NAME,
+                hass=hass,
+                coordinator=coordinator,
+                # entry=entry,
+                # unique_id=f"{entry.entry_id}",
+                # name=f"{DEFAULT_NAME} {entry.data[CONF_IP_ADDRESS]}",
             )
-        ]
+        ],
+        True,
     )
 
 
@@ -62,29 +65,50 @@ class SikuFan(SikuEntity, FanEntity):
         PRESET_MODE_PARTY,
         PRESET_MODE_SLEEP,
     ]
-    _attr_has_entity_name = True
-    _attr_name = None
     _attr_should_poll = True
 
     def __init__(
         self,
         hass: HomeAssistant,
         coordinator: SikuDataUpdateCoordinator,
-        unique_id: str,
-        name: str,
+        # entry: ConfigEntry,
+        # unique_id: str,
+        # name: str,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
-        self.hass = hass
-        self._unique_id = unique_id
-        if name is None:
-            name = {DEFAULT_NAME}
-        self._attr_name = f"{name} {coordinator.api.host}"
 
-    @property
-    def unique_id(self) -> str:
-        """Return the unique id."""
-        return self._unique_id
+        self.hass = hass
+
+        # self._unique_id = unique_id
+        # if name is None:
+        #    name = {DEFAULT_NAME}
+
+        # self._attr_name = f"{name} {coordinator.api.host}"
+        # self._attr_unique_id = entry.unique_id or entry.entry_id
+
+        # self._attr_device_info = DeviceInfo(
+        #     identifiers={(DOMAIN, self._attr_unique_id)},
+        #     via_device=(DOMAIN, entry.data[CONF_IP_ADDRESS], entry.data[CONF_PORT]),
+        #     manufacturer=DEFAULT_MANUFACTURER,
+        #     name=self._attr_name,
+        # )
+        self._attr_name = f"{DEFAULT_NAME} {coordinator.api.host}"
+        self._attr_device_info = coordinator.device_info
+        self._attr_unique_id = (
+            f"{DOMAIN}-{coordinator.api.host}-{coordinator.api.port}-fan"
+        )
+
+        # self._attr_device_info = DeviceInfo(
+        #     identifiers={(DOMAIN, f"{coordinator.api.host}:{coordinator.api.port}")},
+        #     name=coordinator.name,
+        #     # entry_type=DeviceEntryType.SERVICE,
+        # )
+
+    # @property
+    # def unique_id(self) -> str:
+    #     """Return the unique id."""
+    #     return self._unique_id
 
     @property
     def speed_count(self) -> int:
@@ -161,8 +185,7 @@ class SikuFan(SikuEntity, FanEntity):
     ) -> None:
         """Turn on the entity."""
         if percentage is None:
-            percentage = ordered_list_item_to_percentage(
-                FAN_SPEEDS, FAN_SPEEDS[0])
+            percentage = ordered_list_item_to_percentage(FAN_SPEEDS, FAN_SPEEDS[0])
 
         await self.async_set_percentage(percentage)
         self.async_write_ha_state()
