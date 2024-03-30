@@ -31,57 +31,62 @@ LOGGER = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
-class SikuRequiredKeysMixin:
-    """Mixin for required keys."""
-
-    value_fn: Callable[[Any], float]
-    enabled: Callable[[Any], bool]
-
-
-@dataclasses.dataclass(frozen=True)
-class SikuSensorEntityDescription(SensorEntityDescription, SikuRequiredKeysMixin):
+class SikuSensorEntityDescription(SensorEntityDescription):
     """Describes Siku fan sensor entity."""
 
 
 SENSORS: tuple[SikuSensorEntityDescription, ...] = (
-    SensorEntityDescription(
+    SikuSensorEntityDescription(
         key="version",
         translation_key="version",
         icon="mdi:information",
         name="Version",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    SensorEntityDescription(
+    SikuSensorEntityDescription(
         key="humidity",
         name="Humidity",
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.HUMIDITY,
         state_class=SensorStateClass.MEASUREMENT,
     ),
-    SensorEntityDescription(
+    SikuSensorEntityDescription(
         key="rpm",
         name="RPM",
         icon="mdi:rotate-right",
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         state_class=SensorStateClass.MEASUREMENT,
     ),
-    SensorEntityDescription(
+    SikuSensorEntityDescription(
         key="firmware",
         name="Firmware version",
         icon="mdi:information",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    SensorEntityDescription(
+    SikuSensorEntityDescription(
         key="alarm",
         name="Alarm",
         icon="mdi:alarm-light",
     ),
-    SensorEntityDescription(
+    SikuSensorEntityDescription(
         key="filter_timer",
         name="Filter timer countdown",
+        icon="mdi:timer",
         native_unit_of_measurement=UnitOfTime.MINUTES,
+        suggested_display_precision=2,
+        suggested_unit_of_measurement=UnitOfTime.DAYS,
         device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SikuSensorEntityDescription(
+        key="boost",
+        name="Boost mode",
+        icon="msi:speedometer",
+    ),
+    SikuSensorEntityDescription(
+        key="mode",
+        name="Mode",
+        icon="mdi:fan-auto",
     ),
 )
 
@@ -115,26 +120,16 @@ class SikuSensor(SikuEntity, SensorEntity):
         hass: HomeAssistant,
         coordinator: SikuDataUpdateCoordinator,
         description: SensorEntityDescription,
-        # entry: ConfigEntry,
-        # unique_id: str,
-        # name: str,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator=coordinator, context=description.key)
         self.hass = hass
 
         self.entity_description = description
-        LOGGER.debug("Sensor description: %s", description)
-        LOGGER.debug("Sensor coordinator: %s", coordinator)
-        LOGGER.debug("Sensor device: %s", coordinator.device_info)
-
         self._attr_device_info = coordinator.device_info
         self._attr_unique_id = (
             f"{DOMAIN}-{coordinator.api.host}-{coordinator.api.port}-{description.key}"
         )
-
-        # Initial update of attributes.
-        # self._update_attrs()
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -145,5 +140,5 @@ class SikuSensor(SikuEntity, SensorEntity):
     def _update_attrs(self) -> None:
         """Update sensor attributes based on coordinator data."""
         key = self.entity_description.key
-        LOGGER.debug("Handling update for %s : %s", key, self.coordinator.data[key])
         self._attr_native_value = self.coordinator.data[key]
+        LOGGER.debug("Native value [%s]: %s", key, self._attr_native_value)

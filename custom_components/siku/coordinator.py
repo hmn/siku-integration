@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from random import randint
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_IP_ADDRESS
@@ -17,7 +18,13 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .api_v1 import SikuV1Api
 from .api_v2 import SikuV2Api
-from .const import CONF_ID, DEFAULT_MODEL, DEFAULT_NAME
+from .const import (
+    CONF_ID,
+    DEFAULT_MODEL,
+    DEFAULT_NAME,
+    PRESET_MODE_AUTO,
+    PRESET_MODE_PARTY,
+)
 from .const import CONF_VERSION
 from .const import DOMAIN
 from .const import DEFAULT_MANUFACTURER
@@ -75,11 +82,11 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
             #     "speed": "00",
             #     "oscillating": False,
             #     "direction": None,
-            #     "mode": PRESET_MODE_AUTO,
-            #     "humidity": 50,
-            #     "rpm": 1000,
+            #     "mode": PRESET_MODE_PARTY,
+            #     "humidity": 50 + randint(0, 50),
+            #     "rpm": 1000 + randint(0, 1000),
             #     "firmware": "0.0",
-            #     "filter_timer": 10,
+            #     "filter_timer": 1440 * 30 + 65,
             #     "alarm": False,
             #     "version": "2",
             # }

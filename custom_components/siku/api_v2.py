@@ -36,6 +36,7 @@ COMMAND_ON_OFF = "01"
 COMMAND_SPEED = "02"
 COMMAND_DIRECTION = "B7"
 COMMAND_DEVICE_TYPE = "B9"
+COMMAND_BOOST = "06"
 COMMAND_MODE = "07"
 COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
@@ -95,6 +96,7 @@ class SikuV2Api:
             COMMAND_ON_OFF,
             COMMAND_SPEED,
             COMMAND_DIRECTION,
+            COMMAND_BOOST,
             COMMAND_MODE,
             COMMAND_CURRENT_HUMIDITY,
             COMMAND_FAN1RPM,
@@ -252,6 +254,10 @@ class SikuV2Api:
             direction = None
             oscillating = True
         try:
+            boost = bool(data[COMMAND_BOOST] != "00")
+        except KeyError:
+            boost = False
+        try:
             mode = MODES[data[COMMAND_MODE]]
         except KeyError:
             mode = PRESET_MODE_AUTO
@@ -291,6 +297,7 @@ class SikuV2Api:
             "speed": speed,
             "oscillating": oscillating,
             "direction": direction,
+            "boost": boost,
             "mode": mode,
             "humidity": humidity,
             "rpm": rpm,
