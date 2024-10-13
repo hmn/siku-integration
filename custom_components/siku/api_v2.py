@@ -154,6 +154,12 @@ class SikuV2Api:
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
+    async def reset_filter_alarm(self) -> None:
+        """Reset filter alarm."""
+        cmd = f"{COMMAND_RESET_ALARMS}".upper()
+        await self._send_command(FUNC_READ_WRITE, cmd)
+        return await self.status()
+
     def _checksum(self, data: str) -> str:
         """Calculate checksum for packet and return it as high order byte hex string."""
         hexlist = self._hexlist(data)

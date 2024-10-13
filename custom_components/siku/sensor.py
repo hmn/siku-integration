@@ -1,4 +1,4 @@
-"""Support for MelCloud device sensors."""
+"""Siku sensors"""
 
 from __future__ import annotations
 

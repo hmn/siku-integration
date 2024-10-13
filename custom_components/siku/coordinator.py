@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from random import randint
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_IP_ADDRESS
@@ -21,6 +22,7 @@ from .const import (
     CONF_ID,
     DEFAULT_MODEL,
     DEFAULT_NAME,
+    PRESET_MODE_PARTY,
 )
 from .const import CONF_VERSION
 from .const import DOMAIN

@@ -1,4 +1,4 @@
-"""Demo fan platform that has a fake fan."""
+"""Siku fan"""
 
 from __future__ import annotations
 
@@ -58,6 +58,8 @@ class SikuFan(SikuEntity, FanEntity):
         | FanEntityFeature.OSCILLATE
         | FanEntityFeature.DIRECTION
         | FanEntityFeature.PRESET_MODE
+        | FanEntityFeature.TURN_ON
+        | FanEntityFeature.TURN_OFF
     )
     _attr_preset_modes = [
         PRESET_MODE_AUTO,
@@ -71,44 +73,16 @@ class SikuFan(SikuEntity, FanEntity):
         self,
         hass: HomeAssistant,
         coordinator: SikuDataUpdateCoordinator,
-        # entry: ConfigEntry,
-        # unique_id: str,
-        # name: str,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
 
         self.hass = hass
-
-        # self._unique_id = unique_id
-        # if name is None:
-        #    name = {DEFAULT_NAME}
-
-        # self._attr_name = f"{name} {coordinator.api.host}"
-        # self._attr_unique_id = entry.unique_id or entry.entry_id
-
-        # self._attr_device_info = DeviceInfo(
-        #     identifiers={(DOMAIN, self._attr_unique_id)},
-        #     via_device=(DOMAIN, entry.data[CONF_IP_ADDRESS], entry.data[CONF_PORT]),
-        #     manufacturer=DEFAULT_MANUFACTURER,
-        #     name=self._attr_name,
-        # )
         self._attr_name = f"{DEFAULT_NAME} {coordinator.api.host}"
         self._attr_device_info = coordinator.device_info
         self._attr_unique_id = (
             f"{DOMAIN}-{coordinator.api.host}-{coordinator.api.port}-fan"
         )
-
-        # self._attr_device_info = DeviceInfo(
-        #     identifiers={(DOMAIN, f"{coordinator.api.host}:{coordinator.api.port}")},
-        #     name=coordinator.name,
-        #     # entry_type=DeviceEntryType.SERVICE,
-        # )
-
-    # @property
-    # def unique_id(self) -> str:
-    #     """Return the unique id."""
-    #     return self._unique_id
 
     @property
     def speed_count(self) -> int:
