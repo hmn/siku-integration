@@ -1,4 +1,4 @@
-"""Siku fan"""
+"""Siku fan."""
 
 from __future__ import annotations
 

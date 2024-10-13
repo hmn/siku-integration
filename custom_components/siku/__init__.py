@@ -6,7 +6,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD, CONF_PORT
+from homeassistant.const import CONF_IP_ADDRESS, CONF_PORT
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, DEFAULT_NAME
