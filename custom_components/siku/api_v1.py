@@ -91,6 +91,10 @@ class SikuV1Api:
         hexlist = await self._send_command(COMMAND_PARTY)
         return await self._translate_response(hexlist)
 
+    async def reset_filter_alarm(self) -> None:
+        """Reset filter alarm."""
+        raise NotImplementedError("Alarm reset is not implemented in this version.")
+
     async def _send_command(self, command: str) -> list[str]:
         """Send command to fan controller."""
         packet_command = bytes.fromhex(command)

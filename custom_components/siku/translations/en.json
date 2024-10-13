@@ -8,16 +8,18 @@
       "timeout_error": "Timeout error, failed to get status",
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
+      "invalid_idnum": "Invalid authentication, idnum must be 16 chars and can be found on the fan, on some models DEFAULT_DEVICEID can be used",
+      "invalid_password": "Invalid authentication, password max size is 8 chars and default is 1111",
       "unknown": "Unexpected error"
     },
     "step": {
       "user": {
         "data": {
-          "ip_address": "IP Address",
+          "ip_address": "IP address",
           "port": "Port",
-          "version": "Hardware Version",
+          "version": "Hardware version",
           "idnum": "Fan ID (only v2)",
-          "password": "Fan Password (only v2)"
+          "password": "Fan password (only v2)"
         }
       }
     }
