@@ -214,7 +214,7 @@ class SikuV2Api:
         # initialize a socket, think of it as a cable
         # SOCK_DGRAM specifies that this is UDP
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
-            s.settimeout(10)
+            s.settimeout(1)
 
             server_address = (self.host, self.port)
             LOGGER.debug(
