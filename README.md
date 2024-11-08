@@ -31,7 +31,7 @@ The fan is sold under different brands, for instance :
 - [SIKU RV/Twinfresh](https://www.siku.at/produkte/)
 - [DUKA One](https://dukaventilation.dk/produkter/1-rums-ventilationsloesninger)
 - [Oxxify](https://raumluft-shop.de/lueftung/dezentrale-lueftungsanlage-mit-waermerueckgewinnung/oxxify.html)
-- [Twinfresh](https://twinfresh.no)
+- [Twinfresh](https://foris.no/produktkategori/miniventilasjon/miniventilasjon-miniventilasjon/)
 
 ## Installation
 
