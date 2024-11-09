@@ -223,42 +223,47 @@ class SikuV2Api:
         # enter the data content of the UDP packet as hex
         packet_str = self._build_packet(func, data)
         packet_data = bytes.fromhex(packet_str)
-        LOGGER.debug("packet data: %s", packet_data)
 
-        # initialize a socket, think of it as a cable
-        # SOCK_DGRAM specifies that this is UDP
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
-            s.settimeout(1)
+        for attempt in range(3):  # Retry up to 3 times
+            try:
+                # initialize a socket, think of it as a cable
+                # SOCK_DGRAM specifies that this is UDP
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
+                    s.settimeout(1)
+                    server_address = (self.host, self.port)
+                    LOGGER.debug(
+                        'sending "%s" size(%s) to %s',
+                        packet_data.hex(),
+                        len(packet_data),
+                        server_address,
+                    )
+                    s.sendto(packet_data, server_address)
 
-            server_address = (self.host, self.port)
-            LOGGER.debug(
-                'sending "%s" size(%s) to %s',
-                packet_data.hex(),
-                len(packet_data),
-                server_address,
-            )
-            s.sendto(packet_data, server_address)
+                    if func == FUNC_WRITE:
+                        LOGGER.debug("write command, no response expected")
+                        s.close()
+                        return []
 
-            if func == FUNC_WRITE:
-                LOGGER.debug("write command, no response expected")
-                return []
+                    # Receive response
+                    result_data, server = s.recvfrom(4096)
+                    LOGGER.debug(
+                        'received "%s" size(%s) from %s',
+                        result_data,
+                        len(result_data),
+                        server,
+                    )
+                    result_str = result_data.hex().upper()
+                    LOGGER.debug("receive string: %s", result_str)
 
-            # Receive response
-            result_data, server = s.recvfrom(256)
-            LOGGER.debug(
-                "receive data: %s size(%s) from %s",
-                result_data,
-                len(result_data),
-                server,
-            )
-            result_str = result_data.hex().upper()
-            LOGGER.debug("receive string: %s", result_str)
-
-            result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
-            if not self._verify_checksum(result_hexlist):
-                raise ValueError("Checksum error")
-            LOGGER.debug("returning hexlist %s", result_hexlist)
-            return result_hexlist
+                    result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
+                    if not self._verify_checksum(result_hexlist):
+                        raise ValueError("Checksum error")
+                    LOGGER.debug("returning hexlist %s", result_hexlist)
+                    return result_hexlist
+            except TimeoutError:
+                LOGGER.warning("Timeout occurred, retrying... (%d/3)", attempt + 1)
+                if attempt == 2:
+                    raise TimeoutError("Failed to send command after 3 attempts")
 
     async def _translate_response(self, data: dict) -> dict:
         """Translate response data to dict."""
