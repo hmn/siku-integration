@@ -539,7 +539,7 @@ class SikuV1Api:
             "mode": data["operation_mode"],
             "humidity": int(data["humidity_level"]),
             "alarm": bool(data["alarm_status"] == NoYes.YES),
-            "filter_timer": int(data["timer_countdown"]),
+            "timer_countdown": int(data["timer_countdown"]),
             "boost": bool(
                 data["boost_mode_after_sensor"] == NoYesYes.YES
                 or data["boost_mode_after_sensor"] == NoYesYes.YES2

@@ -2,6 +2,7 @@
 
 import logging
 import socket
+from homeassistant.util.percentage import percentage_to_ranged_value
 
 from .const import DIRECTION_ALTERNATING
 from .const import DIRECTIONS
@@ -38,6 +39,7 @@ COMMAND_DIRECTION = "B7"
 COMMAND_DEVICE_TYPE = "B9"
 COMMAND_BOOST = "06"
 COMMAND_MODE = "07"
+COMMAND_TIMER_COUNTDOWN = "0B"
 COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
 COMMAND_FAN1RPM = "4A"
@@ -78,6 +80,11 @@ MODES = {
     MODE_PARTY: PRESET_MODE_PARTY,
 }
 
+EMPTY_VALUE = "00"
+
+SPEED_MANUAL_MIN = 0
+SPEED_MANUAL_MAX = 255
+
 
 class SikuV2Api:
     """Handle requests to the fan controller."""
@@ -95,9 +102,11 @@ class SikuV2Api:
             COMMAND_DEVICE_TYPE,
             COMMAND_ON_OFF,
             COMMAND_SPEED,
+            COMMAND_MANUAL_SPEED,
             COMMAND_DIRECTION,
             COMMAND_BOOST,
             COMMAND_MODE,
+            COMMAND_TIMER_COUNTDOWN,
             COMMAND_CURRENT_HUMIDITY,
             COMMAND_FAN1RPM,
             COMMAND_FILTER_TIMER,
@@ -129,6 +138,13 @@ class SikuV2Api:
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
+    async def speed_manual(self, speed: str) -> None:
+        """Set manual fan speed."""
+        speed = percentage_to_ranged_value(SPEED_MANUAL_MIN, SPEED_MANUAL_MAX, speed)
+        cmd = f"{COMMAND_MANUAL_SPEED}{speed}".upper()
+        await self._send_command(FUNC_READ_WRITE, cmd)
+        return await self.status()
+
     async def direction(self, direction: str) -> None:
         """Set fan direction."""
         # if direction is in DIRECTIONS values translate it to the key value
@@ -156,8 +172,8 @@ class SikuV2Api:
 
     async def reset_filter_alarm(self) -> None:
         """Reset filter alarm."""
-        cmd = f"{COMMAND_RESET_ALARMS}".upper()
-        await self._send_command(FUNC_READ_WRITE, cmd)
+        cmd = f"{COMMAND_RESET_ALARMS}{EMPTY_VALUE}{COMMAND_RESET_FILTER_TIMER}{EMPTY_VALUE}".upper()
+        await self._send_command(FUNC_WRITE, cmd)
         return await self.status()
 
     def _checksum(self, data: str) -> str:
@@ -209,38 +225,47 @@ class SikuV2Api:
         # enter the data content of the UDP packet as hex
         packet_str = self._build_packet(func, data)
         packet_data = bytes.fromhex(packet_str)
-        LOGGER.debug("packet data: %s", packet_data)
 
-        # initialize a socket, think of it as a cable
-        # SOCK_DGRAM specifies that this is UDP
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
-            s.settimeout(1)
+        for attempt in range(3):  # Retry up to 3 times
+            try:
+                # initialize a socket, think of it as a cable
+                # SOCK_DGRAM specifies that this is UDP
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
+                    s.settimeout(1)
+                    server_address = (self.host, self.port)
+                    LOGGER.debug(
+                        'sending "%s" size(%s) to %s',
+                        packet_data.hex(),
+                        len(packet_data),
+                        server_address,
+                    )
+                    s.sendto(packet_data, server_address)
 
-            server_address = (self.host, self.port)
-            LOGGER.debug(
-                'sending "%s" size(%s) to %s',
-                packet_data.hex(),
-                len(packet_data),
-                server_address,
-            )
-            s.sendto(packet_data, server_address)
+                    if func == FUNC_WRITE:
+                        LOGGER.debug("write command, no response expected")
+                        s.close()
+                        return []
 
-            # Receive response
-            result_data, server = s.recvfrom(256)
-            LOGGER.debug(
-                "receive data: %s size(%s) from %s",
-                result_data,
-                len(result_data),
-                server,
-            )
-            result_str = result_data.hex().upper()
-            LOGGER.debug("receive string: %s", result_str)
+                    # Receive response
+                    result_data, server = s.recvfrom(4096)
+                    LOGGER.debug(
+                        'received "%s" size(%s) from %s',
+                        result_data,
+                        len(result_data),
+                        server,
+                    )
+                    result_str = result_data.hex().upper()
+                    LOGGER.debug("receive string: %s", result_str)
 
-            result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
-            if not self._verify_checksum(result_hexlist):
-                raise Exception("Checksum error")
-            LOGGER.debug("returning hexlist %s", result_hexlist)
-            return result_hexlist
+                    result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
+                    if not self._verify_checksum(result_hexlist):
+                        raise ValueError("Checksum error")
+                    LOGGER.debug("returning hexlist %s", result_hexlist)
+                    return result_hexlist
+            except TimeoutError:
+                LOGGER.warning("Timeout occurred, retrying... (%d/3)", attempt + 1)
+                if attempt == 2:
+                    raise TimeoutError("Failed to send command after 3 attempts")
 
     async def _translate_response(self, data: dict) -> dict:
         """Translate response data to dict."""
@@ -252,7 +277,11 @@ class SikuV2Api:
         try:
             speed = f"{int(data[COMMAND_SPEED], 16):02}"
         except KeyError:
-            speed = "00"
+            speed = "FF"
+        try:
+            manual_speed = f"{int(data[COMMAND_MANUAL_SPEED], 16):02}"
+        except KeyError:
+            manual_speed = "00"
         try:
             direction = DIRECTIONS[data[COMMAND_DIRECTION]]
             oscillating = bool(direction == DIRECTION_ALTERNATING)
@@ -279,9 +308,9 @@ class SikuV2Api:
             # Byte 1: Minutes (0...59)
             # Byte 2: Hours (0...23)
             # Byte 3: Days (0...181)
-            minutes = int(data[COMMAND_FILTER_TIMER][0:2], 16)
+            days = int(data[COMMAND_FILTER_TIMER][0:2], 16)
             hours = int(data[COMMAND_FILTER_TIMER][2:4], 16)
-            days = int(data[COMMAND_FILTER_TIMER][4:6], 16)
+            minutes = int(data[COMMAND_FILTER_TIMER][4:6], 16)
             filter_timer = int(minutes + hours * 60 + days * 24 * 60)
         except KeyError:
             filter_timer = 0
@@ -298,9 +327,23 @@ class SikuV2Api:
             firmware = f"{int(data[COMMAND_READ_FIRMWARE_VERSION][0], 16)}.{int(data[COMMAND_READ_FIRMWARE_VERSION][1], 16)}"
         except KeyError:
             firmware = None
+        try:
+            # Byte 1 – seconds (0…59)
+            # Byte 2 – minutes (0…59)
+            # Byte 3 – hours (0…23)
+            hours = int(data[COMMAND_TIMER_COUNTDOWN][0:2], 16)
+            minutes = int(data[COMMAND_TIMER_COUNTDOWN][2:4], 16)
+            seconds = int(data[COMMAND_TIMER_COUNTDOWN][4:6], 16)
+            timer_countdown = int(seconds + minutes * 60 + hours * 60 * 60)
+        except KeyError:
+            timer_countdown = 0
         return {
             "is_on": is_on,
             "speed": speed,
+            "speed_list": FAN_SPEEDS,
+            "manual_speed_selected": bool(speed == "FF"),
+            "manual_speed": int(manual_speed, 16),
+            "manual_speed_low_high_range": (SPEED_MANUAL_MIN, SPEED_MANUAL_MAX),
             "oscillating": oscillating,
             "direction": direction,
             "boost": boost,
@@ -308,7 +351,8 @@ class SikuV2Api:
             "humidity": humidity,
             "rpm": rpm,
             "firmware": firmware,
-            "filter_timer": filter_timer,
+            "filter_timer_days": filter_timer,
+            "timer_countdown": timer_countdown,
             "alarm": alarm,
             "version": "2",
         }
@@ -397,7 +441,7 @@ class SikuV2Api:
                 )
                 i += 1
         except KeyError as ex:
-            raise Exception(
+            raise ValueError(
                 f"Error translating response from fan controller: {str(ex)}"
             ) from ex
         return data
