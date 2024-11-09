@@ -154,6 +154,12 @@ class SikuV2Api:
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
+    async def reset_filter_alarm(self) -> None:
+        """Reset filter alarm."""
+        cmd = f"{COMMAND_RESET_ALARMS}".upper()
+        await self._send_command(FUNC_READ_WRITE, cmd)
+        return await self.status()
+
     def _checksum(self, data: str) -> str:
         """Calculate checksum for packet and return it as high order byte hex string."""
         hexlist = self._hexlist(data)
@@ -208,7 +214,7 @@ class SikuV2Api:
         # initialize a socket, think of it as a cable
         # SOCK_DGRAM specifies that this is UDP
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
-            s.settimeout(10)
+            s.settimeout(1)
 
             server_address = (self.host, self.port)
             LOGGER.debug(

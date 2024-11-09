@@ -28,7 +28,10 @@ Integration for https://www.siku.at/produkte/ wifi fans
 
 The fan is sold under different brands, for instance :
 
-- [SIKU RV/Twinfresh](https://www.siku.at/produkte/)
+- [SIKU RV](https://www.siku.at/produkte/)
+- [Blauberg Group](https://blauberg-group.com)
+- [Blauberg Ventilatoren](https://blaubergventilatoren.de/en/catalog/single-room-reversible-units-vento/functions/2899)
+- [VENTS Twinfresh](https://ventilation-system.com/catalog/decentralized-hru-for-residential-use/)
 - [DUKA One](https://dukaventilation.dk/produkter/1-rums-ventilationsloesninger)
 - [Oxxify](https://raumluft-shop.de/lueftung/dezentrale-lueftungsanlage-mit-waermerueckgewinnung/oxxify.html)
 - [Twinfresh](https://foris.no/produktkategori/miniventilasjon/miniventilasjon-miniventilasjon/)
