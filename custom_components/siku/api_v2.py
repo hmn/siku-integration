@@ -319,7 +319,7 @@ class SikuV2Api:
             "speed": speed,
             "speed_list": FAN_SPEEDS,
             "manual_speed_selected": bool(speed == "FF"),
-            "manual_speed": int(data["manual_speed"]),
+            "manual_speed": int(manual_speed, 16),
             "manual_speed_low_high_range": (SPEED_MANUAL_MIN, SPEED_MANUAL_MAX),
             "oscillating": oscillating,
             "direction": direction,
