@@ -107,7 +107,7 @@ class SikuFan(SikuEntity, FanEntity):
                 self.coordinator.data["manual_speed_selected"]
                 and self.coordinator.data["manual_speed"]
             ):
-                await self.coordinator.api.speed(percentage)
+                await self.coordinator.api.speed_manual(percentage)
             elif self.coordinator.data["speed_list"]:
                 await self.coordinator.api.speed(
                     percentage_to_ordered_list_item(

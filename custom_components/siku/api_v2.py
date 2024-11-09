@@ -2,6 +2,7 @@
 
 import logging
 import socket
+from homeassistant.util.percentage import percentage_to_ranged_value
 
 from .const import DIRECTION_ALTERNATING
 from .const import DIRECTIONS
@@ -78,6 +79,9 @@ MODES = {
     MODE_PARTY: PRESET_MODE_PARTY,
 }
 
+SPEED_MANUAL_MIN = 0
+SPEED_MANUAL_MAX = 255
+
 
 class SikuV2Api:
     """Handle requests to the fan controller."""
@@ -95,6 +99,7 @@ class SikuV2Api:
             COMMAND_DEVICE_TYPE,
             COMMAND_ON_OFF,
             COMMAND_SPEED,
+            COMMAND_MANUAL_SPEED,
             COMMAND_DIRECTION,
             COMMAND_BOOST,
             COMMAND_MODE,
@@ -126,6 +131,13 @@ class SikuV2Api:
         if speed not in FAN_SPEEDS:
             raise ValueError(f"Invalid fan speed: {speed}")
         cmd = f"{COMMAND_SPEED}{speed}".upper()
+        await self._send_command(FUNC_READ_WRITE, cmd)
+        return await self.status()
+
+    async def speed_manual(self, speed: str) -> None:
+        """Set manual fan speed."""
+        speed = percentage_to_ranged_value(SPEED_MANUAL_MIN, SPEED_MANUAL_MAX, speed)
+        cmd = f"{COMMAND_MANUAL_SPEED}{speed}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
@@ -252,7 +264,11 @@ class SikuV2Api:
         try:
             speed = f"{int(data[COMMAND_SPEED], 16):02}"
         except KeyError:
-            speed = "00"
+            speed = "FF"
+        try:
+            manual_speed = f"{int(data[COMMAND_MANUAL_SPEED], 16):02}"
+        except KeyError:
+            manual_speed = "00"
         try:
             direction = DIRECTIONS[data[COMMAND_DIRECTION]]
             oscillating = bool(direction == DIRECTION_ALTERNATING)
@@ -301,6 +317,10 @@ class SikuV2Api:
         return {
             "is_on": is_on,
             "speed": speed,
+            "speed_list": FAN_SPEEDS,
+            "manual_speed_selected": bool(speed == "FF"),
+            "manual_speed": int(data["manual_speed"]),
+            "manual_speed_low_high_range": (SPEED_MANUAL_MIN, SPEED_MANUAL_MAX),
             "oscillating": oscillating,
             "direction": direction,
             "boost": boost,
