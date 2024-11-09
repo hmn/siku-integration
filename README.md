@@ -34,6 +34,7 @@ The fan is sold under different brands, for instance :
 - [VENTS Twinfresh](https://ventilation-system.com/catalog/decentralized-hru-for-residential-use/)
 - [DUKA One](https://dukaventilation.dk/produkter/1-rums-ventilationsloesninger)
 - [Oxxify](https://raumluft-shop.de/lueftung/dezentrale-lueftungsanlage-mit-waermerueckgewinnung/oxxify.html)
+- [Twinfresh](https://foris.no/produktkategori/miniventilasjon/miniventilasjon-miniventilasjon/)
 
 ## Installation
 
