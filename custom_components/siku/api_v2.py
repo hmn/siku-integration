@@ -39,6 +39,7 @@ COMMAND_DIRECTION = "B7"
 COMMAND_DEVICE_TYPE = "B9"
 COMMAND_BOOST = "06"
 COMMAND_MODE = "07"
+COMMAND_TIMER_COUNTDOWN = "11"
 COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
 COMMAND_FAN1RPM = "4A"
@@ -105,6 +106,7 @@ class SikuV2Api:
             COMMAND_DIRECTION,
             COMMAND_BOOST,
             COMMAND_MODE,
+            COMMAND_TIMER_COUNTDOWN,
             COMMAND_CURRENT_HUMIDITY,
             COMMAND_FAN1RPM,
             COMMAND_FILTER_TIMER,
@@ -325,6 +327,10 @@ class SikuV2Api:
             firmware = f"{int(data[COMMAND_READ_FIRMWARE_VERSION][0], 16)}.{int(data[COMMAND_READ_FIRMWARE_VERSION][1], 16)}"
         except KeyError:
             firmware = None
+        try:
+            timer_countdown = int(data[COMMAND_TIMER_COUNTDOWN], 16)
+        except KeyError:
+            timer_countdown = 0
         return {
             "is_on": is_on,
             "speed": speed,
@@ -339,7 +345,8 @@ class SikuV2Api:
             "humidity": humidity,
             "rpm": rpm,
             "firmware": firmware,
-            "filter_timer": filter_timer,
+            "filter_timer_days": filter_timer,
+            "timer_countdown": timer_countdown,
             "alarm": alarm,
             "version": "2",
         }
