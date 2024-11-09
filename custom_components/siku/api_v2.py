@@ -39,7 +39,7 @@ COMMAND_DIRECTION = "B7"
 COMMAND_DEVICE_TYPE = "B9"
 COMMAND_BOOST = "06"
 COMMAND_MODE = "07"
-COMMAND_TIMER_COUNTDOWN = "11"
+COMMAND_TIMER_COUNTDOWN = "0B"
 COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
 COMMAND_FAN1RPM = "4A"
@@ -328,7 +328,13 @@ class SikuV2Api:
         except KeyError:
             firmware = None
         try:
-            timer_countdown = int(data[COMMAND_TIMER_COUNTDOWN], 16)
+            # Byte 1 – seconds (0…59)
+            # Byte 2 – minutes (0…59)
+            # Byte 3 – hours (0…23)
+            hours = int(data[COMMAND_TIMER_COUNTDOWN][0:2], 16)
+            minutes = int(data[COMMAND_TIMER_COUNTDOWN][2:4], 16)
+            seconds = int(data[COMMAND_TIMER_COUNTDOWN][4:6], 16)
+            timer_countdown = int(seconds + minutes * 60 + hours * 60 * 60)
         except KeyError:
             timer_countdown = 0
         return {
