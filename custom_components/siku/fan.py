@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.percentage import ordered_list_item_to_percentage
 from homeassistant.util.percentage import percentage_to_ordered_list_item
+from homeassistant.util.percentage import ranged_value_to_percentage
 
 from . import SikuEntity
 from .const import DEFAULT_NAME
@@ -102,9 +103,21 @@ class SikuFan(SikuEntity, FanEntity):
             await self.hass.async_add_executor_job(self.set_preset_mode, None)
         else:
             await self.coordinator.api.power_on()
-            await self.coordinator.api.speed(
-                percentage_to_ordered_list_item(FAN_SPEEDS, percentage)
-            )
+            if (
+                self.coordinator.data["manual_speed_selected"]
+                and self.coordinator.data["manual_speed"]
+            ):
+                await self.coordinator.api.speed(percentage)
+            elif self.coordinator.data["speed_list"]:
+                await self.coordinator.api.speed(
+                    percentage_to_ordered_list_item(
+                        self.coordinator.data["speed_list"], percentage
+                    )
+                )
+            else:
+                await self.coordinator.api.speed(
+                    percentage_to_ordered_list_item(FAN_SPEEDS, percentage)
+                )
             if self.oscillating:
                 await self.hass.async_add_executor_job(
                     self.set_preset_mode, PRESET_MODE_AUTO
@@ -203,11 +216,45 @@ class SikuFan(SikuEntity, FanEntity):
         if self.coordinator.data is None:
             return
         if self.coordinator.data["is_on"]:
-            self.set_percentage(
-                ordered_list_item_to_percentage(
-                    FAN_SPEEDS, self.coordinator.data["speed"]
+            if (
+                self.coordinator.data["manual_speed_selected"]
+                and self.coordinator.data["manual_speed"]
+            ):
+                LOGGER.debug(
+                    "Setting manual speed from %s",
+                    self.coordinator.data["manual_speed"],
                 )
-            )
+                self.set_percentage(
+                    ranged_value_to_percentage(
+                        self.coordinator.data["manual_speed_low_high_range"],
+                        self.coordinator.data["manual_speed"],
+                    )
+                )
+                # self.set_percentage(self.coordinator.data["manual_speed"])
+            elif self.coordinator.data["speed_list"]:
+                LOGGER.debug(
+                    "Setting percentage from speed %s", self.coordinator.data["speed"]
+                )
+                LOGGER.debug(
+                    "Setting percentage from speed %s",
+                    self.coordinator.data["speed_list"],
+                )
+                LOGGER.debug(
+                    "Setting percentage from speed type %s",
+                    type(self.coordinator.data["speed"]),
+                )
+                self.set_percentage(
+                    ordered_list_item_to_percentage(
+                        self.coordinator.data["speed_list"],
+                        self.coordinator.data["speed"],
+                    )
+                )
+            else:
+                self.set_percentage(
+                    ordered_list_item_to_percentage(
+                        FAN_SPEEDS, self.coordinator.data["speed"]
+                    )
+                )
         else:
             self.set_percentage(0)
         if (

@@ -77,9 +77,39 @@ SENSORS: tuple[SikuSensorEntityDescription, ...] = (
         state_class=SensorStateClass.TOTAL,
     ),
     SikuSensorEntityDescription(
+        key="boost_mode_timer",
+        name="Boost mode timer",
+        icon="mdi:timer",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        suggested_display_precision=2,
+        suggested_unit_of_measurement=UnitOfTime.DAYS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SikuSensorEntityDescription(
+        key="night_mode_timer",
+        name="Sleep mode timer",
+        icon="mdi:timer",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        suggested_display_precision=2,
+        suggested_unit_of_measurement=UnitOfTime.DAYS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SikuSensorEntityDescription(
+        key="party_mode_timer",
+        name="Party mode timer",
+        icon="mdi:timer",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        suggested_display_precision=2,
+        suggested_unit_of_measurement=UnitOfTime.DAYS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SikuSensorEntityDescription(
         key="boost",
         name="Boost mode",
-        icon="msi:speedometer",
+        icon="mdi:speedometer",
     ),
     SikuSensorEntityDescription(
         key="mode",
@@ -98,12 +128,15 @@ async def async_setup_entry(
     LOGGER.debug("Setting up Siku fan sensors %s", entry.entry_id)
     coordinator = hass.data[DOMAIN][entry.entry_id]
     available_resources: set[str] = {k.lower() for k, _ in coordinator.data.items()}
+    # LOGGER.debug("Available resources : %s", available_resources)
 
     entities: list[SikuSensor] = [
         SikuSensor(hass, coordinator, description)
         for description in SENSORS
         if description.key in available_resources
     ]
+
+    # LOGGER.debug("Entities: %s", entities)
 
     async_add_entities(entities, True)
 

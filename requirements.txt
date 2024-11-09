@@ -2,4 +2,5 @@ colorlog
 homeassistant
 pip
 ruff
+pytest
 git+https://github.com/boto/botocore
