@@ -79,6 +79,8 @@ MODES = {
     MODE_PARTY: PRESET_MODE_PARTY,
 }
 
+EMPTY_VALUE = "00"
+
 SPEED_MANUAL_MIN = 0
 SPEED_MANUAL_MAX = 255
 
@@ -168,7 +170,7 @@ class SikuV2Api:
 
     async def reset_filter_alarm(self) -> None:
         """Reset filter alarm."""
-        cmd = f"{COMMAND_RESET_ALARMS}00".upper()
+        cmd = f"{COMMAND_RESET_ALARMS}{EMPTY_VALUE}{COMMAND_RESET_FILTER_TIMER}{EMPTY_VALUE}".upper()
         await self._send_command(FUNC_WRITE, cmd)
         return await self.status()
 
