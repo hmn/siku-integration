@@ -123,14 +123,14 @@ class OperationMode(IntEnum):
 
 
 class NoYes(IntEnum):
-    """No/Yes response"""
+    """No/Yes response."""
 
     NO = 0
     YES = 1
 
 
 class NoYesYes(IntEnum):
-    """No/Yes response"""
+    """No/Yes response."""
 
     NO = 0
     YES = 1
@@ -138,7 +138,7 @@ class NoYesYes(IntEnum):
 
 
 class ZeroTenVoltThreshold:
-    """0 - 10 V sensor activation threshold, [%]"""
+    """0 - 10 V sensor activation threshold, [%]."""
 
     def __init__(self, value: int):
         """Initialize checks for allowed values."""
@@ -476,7 +476,7 @@ class SikuV1Api:
                     hexlist = ["".join(x) for x in zip(*[iter(hexstring)] * 2)]
                     LOGGER.debug("returning hexlist %s", hexlist)
                     return hexlist
-            except socket.timeout:
+            except TimeoutError:
                 LOGGER.warning("Timeout occurred, retrying... (%d/3)", attempt + 1)
                 if attempt == 2:
                     raise TimeoutError("Failed to send command after 3 attempts")
@@ -540,9 +540,18 @@ class SikuV1Api:
             "humidity": int(data["humidity_level"]),
             "alarm": bool(data["alarm_status"] == NoYes.YES),
             "filter_timer": int(data["timer_countdown"]),
-            "boost": bool(data["boost_mode_after_sensor"] == NoYesYes.YES or data["boost_mode_after_sensor"] == NoYesYes.YES2),
-            "boost_mode_timer": int(data["boost_mode_timer"]) if "boost_mode_timer" in data else None,
-            "night_mode_timer": int(data["night_mode_timer"]) if "night_mode_timer" in data else None,
-            "party_mode_timer": int(data["party_mode_timer"]) if "party_mode_timer" in data else None,
+            "boost": bool(
+                data["boost_mode_after_sensor"] == NoYesYes.YES
+                or data["boost_mode_after_sensor"] == NoYesYes.YES2
+            ),
+            "boost_mode_timer": int(data["boost_mode_timer"])
+            if "boost_mode_timer" in data
+            else None,
+            "night_mode_timer": int(data["night_mode_timer"])
+            if "night_mode_timer" in data
+            else None,
+            "party_mode_timer": int(data["party_mode_timer"])
+            if "party_mode_timer" in data
+            else None,
             "version": "1",
         }
