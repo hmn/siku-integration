@@ -168,7 +168,7 @@ class SikuV2Api:
 
     async def reset_filter_alarm(self) -> None:
         """Reset filter alarm."""
-        cmd = f"{COMMAND_RESET_ALARMS}".upper()
+        cmd = f"{COMMAND_RESET_ALARMS}00".upper()
         await self._send_command(FUNC_WRITE, cmd)
         return await self.status()
 
@@ -237,6 +237,10 @@ class SikuV2Api:
             )
             s.sendto(packet_data, server_address)
 
+            if func == FUNC_WRITE:
+                LOGGER.debug("write command, no response expected")
+                return []
+
             # Receive response
             result_data, server = s.recvfrom(256)
             LOGGER.debug(
@@ -250,7 +254,7 @@ class SikuV2Api:
 
             result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
             if not self._verify_checksum(result_hexlist):
-                raise Exception("Checksum error")
+                raise ValueError("Checksum error")
             LOGGER.debug("returning hexlist %s", result_hexlist)
             return result_hexlist
 
@@ -417,7 +421,7 @@ class SikuV2Api:
                 )
                 i += 1
         except KeyError as ex:
-            raise Exception(
+            raise ValueError(
                 f"Error translating response from fan controller: {str(ex)}"
             ) from ex
         return data
