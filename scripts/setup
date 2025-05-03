@@ -2,11 +2,16 @@
 
 set -e
 
-cd "$(dirname "$0")/.."
-
 # Install packages
 sudo apt-get update
-sudo apt-get install -y libpcap-dev ffmpeg
+sudo apt-get install -y libpcap-dev ffmpeg libturbojpeg0
 
 # Install dependencies
+which python3
+which pip3
+python3 --version
+pip3 --version
 python3 -m pip install --requirement requirements.txt
+
+# change away from the script directory
+cd "$(dirname "$0")/.."
