@@ -168,6 +168,7 @@ CONTROL = {
     "party_mode_timer": {"cmd": 16, "size": 3, "value": TimerSeconds},
     "deactivation_delay_timer": {"cmd": 17, "size": 3, "value": TimerSeconds},
     "humidity_sensor": {"cmd": 21, "size": 1, "value": NoneType},
+    "reset_filter_alarm": {"cmd": 30, "size": 1, "value": NoneType},
 }
 
 FEEDBACK = {
@@ -418,7 +419,12 @@ class SikuV1Api:
 
     async def reset_filter_alarm(self) -> None:
         """Reset filter alarm."""
-        LOGGER.info("Reset filter alarm is not implemented in this version.")
+        await self.power_on()
+        data = await self._control_packet([("reset_filter_alarm", None)])
+        hexlist = await self._send_command(data)
+        result = await self._translate_response(hexlist)
+        LOGGER.info("Reset filter alarm : %s", result["filter_end_of_life"])
+        return await self._format_response(result)
 
     async def _control_packet(self, commands: list[tuple]) -> bytes:
         """Generate packet data for fan control."""
@@ -538,7 +544,7 @@ class SikuV1Api:
             ),
             "mode": data["operation_mode"],
             "humidity": int(data["humidity_level"]),
-            "alarm": bool(data["alarm_status"] == NoYes.YES),
+            "alarm": bool(data["filter_end_of_life"] == NoYes.YES),
             "timer_countdown": int(data["timer_countdown"]),
             "boost": bool(
                 data["boost_mode_after_sensor"] == NoYesYes.YES
