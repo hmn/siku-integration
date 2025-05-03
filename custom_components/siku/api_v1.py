@@ -52,8 +52,9 @@ class Direction(IntEnum):
 class Timer(IntEnum):
     """Timer selection for fan."""
 
-    NIGHT = 0
-    PARTY = 1
+    AUTO = 0
+    NIGHT = 1
+    PARTY = 2
 
 
 class HumiditySensorThreshold:
@@ -413,7 +414,20 @@ class SikuV1Api:
         data = await self._control_packet([("timer", Timer.PARTY)])
         hexlist = await self._send_command(data)
         result = await self._translate_response(hexlist)
-        LOGGER.info("Set party mode : %s", result["operation_mode"])
+        LOGGER.info(
+            "Set party mode : %s timer:%s",
+            result["operation_mode"],
+            result["timer_countdown"],
+        )
+        result["status"] = OffOn.ON
+        result["speed"] = SpeedSelected.HIGH
+        result["direction"] = Direction.VENTILATION
+        LOGGER.info(
+            "Overwrite party mode values : status:%s speed:%s direction:%s",
+            result["status"],
+            result["speed"],
+            result["direction"],
+        )
         return await self._format_response(result)
 
     async def reset_filter_alarm(self) -> None:

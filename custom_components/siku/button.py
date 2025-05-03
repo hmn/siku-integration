@@ -96,7 +96,8 @@ class SikuButton(SikuEntity, ButtonEntity):
         """Send out a persistent notification."""
         try:
             method = getattr(self.coordinator.api, self.entity_description.action)
-            await method()
+            response = await method()
+            self.coordinator.async_set_updated_data(response)
             self.async_write_ha_state()
         except AttributeError:
             LOGGER.warning("No such method: %s", self.entity_description.action)
