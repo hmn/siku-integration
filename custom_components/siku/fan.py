@@ -191,10 +191,14 @@ class SikuFan(SikuEntity, FanEntity):
         """Set new preset mode."""
         if preset_mode == PRESET_MODE_PARTY:
             await self.async_turn_on()
-            await self.coordinator.api.party()
+            response = await self.coordinator.api.party()
+            if response:
+                self.coordinator.async_set_updated_data(response)
         elif preset_mode == PRESET_MODE_SLEEP:
             await self.async_turn_on()
-            await self.coordinator.api.sleep()
+            response = await self.coordinator.api.sleep()
+            if response:
+                self.coordinator.async_set_updated_data(response)
         elif preset_mode == PRESET_MODE_AUTO:
             await self.async_turn_on()
             await self.async_oscillate(True)
