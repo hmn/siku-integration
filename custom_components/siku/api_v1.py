@@ -420,7 +420,7 @@ class SikuV1Api:
             result["timer_countdown"],
         )
         result["status"] = OffOn.ON
-        result["speed"] = SpeedSelected.HIGH
+        result["speed"] = SpeedSelection.HIGH
         result["direction"] = Direction.VENTILATION
         LOGGER.info(
             "Overwrite party mode values : status:%s speed:%s direction:%s",
