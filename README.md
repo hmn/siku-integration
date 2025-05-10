@@ -66,6 +66,19 @@ custom_components/siku/strings.json
 
 <!---->
 
+## Report issues
+
+If you have any issues with this integration, please [open an issue](https://github.com/hmn/siku-integration/issues).
+
+Make sure to include debug logs. See https://www.home-assistant.io/integrations/logger/ for more information on how to enable debug logs.
+
+```
+logger:
+  default: info
+  logs:
+    custom_components.siku: debug
+```
+
 ## Contributions are welcome!
 
 If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)

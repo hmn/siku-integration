@@ -365,33 +365,40 @@ class SikuV2Api:
 
             # prefix
             LOGGER.debug("start: %s", start)
-            LOGGER.debug("hexlist: %s", "".join(hexlist[start:2]))
-            if "".join(hexlist[0:2]) != PACKET_PREFIX:
-                raise Exception("Invalid packet prefix")
+            packet = "".join(hexlist[start:2])
+            LOGGER.debug("hexlist: %s", packet)
+            if packet != PACKET_PREFIX:
+                raise ValueError(f"Invalid packet prefix {packet} != {PACKET_PREFIX}")
             start += 2
 
             # protocol type
             LOGGER.debug("start: %s", start)
-            LOGGER.debug("hexlist: %s", "".join(hexlist[start]))
-            if "".join(hexlist[start]) != PACKET_PROTOCOL_TYPE:
-                raise Exception("Invalid packet protocol type")
+            packet = "".join(hexlist[start])
+            LOGGER.debug("hexlist: %s", packet)
+            if packet != PACKET_PROTOCOL_TYPE:
+                raise ValueError(
+                    f"Invalid packet protocol type {packet} != {PACKET_PROTOCOL_TYPE}"
+                )
             start += 1
 
             # id
             LOGGER.debug("start: %s", start)
-            LOGGER.debug("hexlist: %s", "".join(hexlist[start]))
-            start += 1 + int("".join(hexlist[start]), 16)
+            packet = "".join(hexlist[start])
+            LOGGER.debug("hexlist: %s", packet)
+            start += 1 + int(packet, 16)
 
             # password
             LOGGER.debug("start: %s", start)
-            LOGGER.debug("hexlist: %s", "".join(hexlist[start]))
-            start += 1 + int("".join(hexlist[start]), 16)
+            packet = "".join(hexlist[start])
+            LOGGER.debug("hexlist: %s", packet)
+            start += 1 + int(packet, 16)
 
             # function
-            if "".join(hexlist[start]) != FUNC_RESULT:
-                raise Exception("Invalid result function")
             LOGGER.debug("start: %s", start)
-            LOGGER.debug("hexlist: %s", "".join(hexlist[start]))
+            packet = "".join(hexlist[start])
+            LOGGER.debug("hexlist: %s", packet)
+            if packet != FUNC_RESULT:
+                raise ValueError(f"Invalid result function {packet} != {FUNC_RESULT}")
             start += 1
 
             # data
@@ -404,11 +411,21 @@ class SikuV2Api:
                 cmd = ""
                 value = ""
                 if parameter == RETURN_CHANGE_FUNC:
-                    LOGGER.debug("special function, change base function")
-                    raise Exception(
-                        "special function, change base function not implemented"
+                    LOGGER.debug(
+                        "special function, change base function not implemented %s",
+                        parameter,
                     )
-                elif parameter == RETURN_INVALID:
+                    raise NotImplementedError(
+                        f"special function, change base function not implemented {parameter}"
+                    )
+                if parameter == RETURN_HIGH_BYTE:
+                    LOGGER.debug(
+                        "special function, high byte not implemented %s", parameter
+                    )
+                    raise NotImplementedError(
+                        f"special function, high byte not implemented {parameter}"
+                    )
+                if parameter == RETURN_INVALID:
                     i += 1
                     cmd = hexlist[i]
                     LOGGER.debug("special function, invalid cmd:%s", cmd)
@@ -424,9 +441,6 @@ class SikuV2Api:
                         [value[idx : idx + 2] for idx in range(0, len(value), 2)][::-1]
                     )
                     i += value_size
-                elif parameter == RETURN_HIGH_BYTE:
-                    LOGGER.debug("special function, high byte")
-                    raise Exception("special function, high byte not implemented")
                 else:
                     cmd = parameter
                     i += 1

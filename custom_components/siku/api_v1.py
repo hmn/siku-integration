@@ -496,10 +496,12 @@ class SikuV1Api:
                     hexlist = ["".join(x) for x in zip(*[iter(hexstring)] * 2)]
                     LOGGER.debug("returning hexlist %s", hexlist)
                     return hexlist
-            except TimeoutError:
+            except TimeoutError as ex:
                 LOGGER.warning("Timeout occurred, retrying... (%d/3)", attempt + 1)
                 if attempt == 2:
-                    raise TimeoutError("Failed to send command after 3 attempts")
+                    raise TimeoutError(
+                        "Failed to send command after 3 attempts"
+                    ) from ex
 
     async def _translate_response(self, hexlist: list[str]) -> dict:
         """Translate response from fan controller."""
