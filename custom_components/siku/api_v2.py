@@ -359,6 +359,7 @@ class SikuV2Api:
 
     async def _parse_response(self, hexlist: list[str]) -> dict:
         """Translate response from fan controller."""
+        LOGGER.debug("parse response: %s", hexlist)
         data = {}
         try:
             start = 0
@@ -368,7 +369,16 @@ class SikuV2Api:
             packet = "".join(hexlist[start:2])
             LOGGER.debug("hexlist: %s", packet)
             if packet != PACKET_PREFIX:
-                raise ValueError(f"Invalid packet prefix {packet} != {PACKET_PREFIX}")
+                LOGGER.error(
+                    "Invalid packet prefix (%s) %s != %s : %s",
+                    start,
+                    packet,
+                    PACKET_PREFIX,
+                    hexlist,
+                )
+                raise ValueError(
+                    f"Invalid packet prefix ({start}) {packet} != {PACKET_PREFIX}"
+                )
             start += 2
 
             # protocol type
@@ -376,8 +386,15 @@ class SikuV2Api:
             packet = "".join(hexlist[start])
             LOGGER.debug("hexlist: %s", packet)
             if packet != PACKET_PROTOCOL_TYPE:
+                LOGGER.error(
+                    "Invalid packet protocol type (%s) %s != %s : %s",
+                    start,
+                    packet,
+                    PACKET_PROTOCOL_TYPE,
+                    hexlist,
+                )
                 raise ValueError(
-                    f"Invalid packet protocol type {packet} != {PACKET_PROTOCOL_TYPE}"
+                    f"Invalid packet protocol type ({start}) {packet} != {PACKET_PROTOCOL_TYPE}"
                 )
             start += 1
 
@@ -398,7 +415,16 @@ class SikuV2Api:
             packet = "".join(hexlist[start])
             LOGGER.debug("hexlist: %s", packet)
             if packet != FUNC_RESULT:
-                raise ValueError(f"Invalid result function {packet} != {FUNC_RESULT}")
+                LOGGER.error(
+                    "Invalid result function (%s) %s != %s : %s",
+                    start,
+                    packet,
+                    FUNC_RESULT,
+                    hexlist,
+                )
+                raise ValueError(
+                    f"Invalid result function ({start}) {packet} != {FUNC_RESULT}"
+                )
             start += 1
 
             # data
