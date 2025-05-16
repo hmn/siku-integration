@@ -3,6 +3,7 @@
   "name": "Siku Fan integration development",
   "image": "mcr.microsoft.com/vscode/devcontainers/python:3.13-bookworm",
   "postCreateCommand": "scripts/setup",
+  "waitFor": "postCreateCommand",
   "forwardPorts": [
     8123
   ],
@@ -18,8 +19,8 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "github.vscode-pull-request-github",
-        "ryanluker.vscode-coverage-gutters",
         "github.vscode-github-actions",
+        "ryanluker.vscode-coverage-gutters",
         "charliermarsh.ruff",
         "GitHub.copilot",
         "GitHub.copilot-chat"
@@ -29,6 +30,7 @@
         "editor.tabSize": 4,
         "python.pythonPath": "/usr/local/bin/python3",
         "python.analysis.autoSearchPaths": false,
+        "python.analysis.typeCheckingMode": "standard",
         "editor.formatOnPaste": false,
         "editor.formatOnSave": true,
         "editor.formatOnType": true,

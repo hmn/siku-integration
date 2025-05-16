@@ -90,7 +90,6 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
             except InvalidInputPassword:
                 errors["base"] = "invalid_password"
                 errors["password"] = "invalid_password"
-                return False
             except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -134,19 +133,31 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
             except InvalidInputPassword:
                 errors["base"] = "invalid_password"
                 errors["password"] = "invalid_password"
-                return False
             except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
                 host = user_input[CONF_IP_ADDRESS]
                 port = user_input[CONF_PORT]
-                await self.async_set_unique_id()
-                self._abort_if_unique_id_configured(f"{host}:{port}")
-                return self.async_update_reload_and_abort(
-                    title=f"{DEFAULT_NAME} {host}",
-                    data=user_input,
+                await self.async_set_unique_id(f"{host}:{port}")
+                self._abort_if_unique_id_configured()
+                # Find the existing entry to update
+                entry = next(
+                    (
+                        e
+                        for e in self._async_current_entries()
+                        if e.unique_id == f"{host}:{port}"
+                    ),
+                    None,
                 )
+                if entry is None:
+                    errors["base"] = "entry_not_found"
+                else:
+                    return self.async_update_reload_and_abort(
+                        entry=entry,
+                        title=f"{DEFAULT_NAME} {host}",
+                        data=user_input,
+                    )
 
         return self.async_show_form(
             step_id="reconfigure_confirm",
