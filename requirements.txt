@@ -3,4 +3,6 @@ homeassistant
 pip
 ruff
 pytest
+pytest-homeassistant-custom-component
+pytest-asyncio
 git+https://github.com/boto/botocore

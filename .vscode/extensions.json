@@ -3,8 +3,8 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "github.vscode-pull-request-github",
-        "ryanluker.vscode-coverage-gutters",
         "github.vscode-github-actions",
+        "ryanluker.vscode-coverage-gutters",
         "charliermarsh.ruff",
         "GitHub.copilot",
         "github.copilot-chat"

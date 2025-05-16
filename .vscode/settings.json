@@ -2,5 +2,8 @@
     "[python]": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "charliermarsh.ruff"
-    }
+    },
+    "python.analysis.typeCheckingMode": "standard",
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }
