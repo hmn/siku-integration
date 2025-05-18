@@ -13,9 +13,7 @@ from custom_components.siku.const import (
     CONF_VERSION,
 )
 
-
-"""Test the Siku Integration config flow."""
-
+# ruff: noqa: D103
 
 IP_ADDRESS = "192.168.1.100"
 PORT = DEFAULT_PORT
@@ -29,8 +27,8 @@ async def test_show_user_form(hass: HomeAssistant):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "user"
+    assert result.get("type") == FlowResultType.FORM
+    assert result.get("step_id") == "user"
 
 
 @pytest.mark.asyncio
@@ -46,9 +44,9 @@ async def test_create_entry_v1(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": "user"}, data=user_input
         )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == f"{DEFAULT_NAME} {IP_ADDRESS}"
-    assert result["data"] == user_input
+    assert result.get("type") == FlowResultType.CREATE_ENTRY
+    assert result.get("title") == f"{DEFAULT_NAME} {IP_ADDRESS}"
+    assert result.get("data") == user_input
 
 
 @pytest.mark.asyncio
@@ -66,9 +64,9 @@ async def test_create_entry_v2(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": "user"}, data=user_input
         )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == f"{DEFAULT_NAME} {IP_ADDRESS}"
-    assert result["data"] == user_input
+    assert result.get("type") == FlowResultType.CREATE_ENTRY
+    assert result.get("title") == f"{DEFAULT_NAME} {IP_ADDRESS}"
+    assert result.get("data") == user_input
 
 
 @pytest.mark.asyncio
@@ -84,8 +82,9 @@ async def test_invalid_idnum_length(hass: HomeAssistant):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}, data=user_input
     )
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "invalid_idnum"
+    assert result.get("type") == FlowResultType.FORM
+    errors = result.get("errors") or {}
+    assert errors.get("base") == "invalid_idnum"
 
 
 @pytest.mark.asyncio
@@ -101,9 +100,10 @@ async def test_invalid_password_length(hass: HomeAssistant):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}, data=user_input
     )
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "invalid_password"
-    assert result["errors"]["password"] == "invalid_password"
+    assert result.get("type") == FlowResultType.FORM
+    errors = result.get("errors") or {}
+    assert errors.get("base") == "invalid_password"
+    assert errors.get("password") == "invalid_password"
 
 
 @pytest.mark.asyncio
@@ -119,8 +119,9 @@ async def test_cannot_connect(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": "user"}, data=user_input
         )
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "cannot_connect"
+    assert result.get("type") == FlowResultType.FORM
+    errors = result.get("errors") or {}
+    assert errors.get("base") == "cannot_connect"
 
 
 @pytest.mark.asyncio
@@ -136,5 +137,6 @@ async def test_unknown_exception(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": "user"}, data=user_input
         )
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"]["base"] == "unknown"
+    assert result.get("type") == FlowResultType.FORM
+    errors = result.get("errors") or {}
+    assert errors.get("base") == "unknown"

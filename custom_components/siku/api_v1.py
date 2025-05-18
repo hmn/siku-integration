@@ -23,8 +23,8 @@ class SpeedSelection(IntEnum):
     HIGH = 3
 
 
-SPEED_MANUAL_MIN = 22
-SPEED_MANUAL_MAX = 255
+SPEED_MANUAL_MIN: int = 22
+SPEED_MANUAL_MAX: int = 255
 
 
 class SpeedManual:
@@ -91,7 +91,9 @@ class TimerSeconds:
     def __init__(self, value: int):
         """Initialize checks for allowed values."""
         if 0 < value > 86400:
-            raise ValueError("Value must be between 0 and 86400")
+            raise ValueError(
+                f"Invalid value {value}. Value must be between 0 and 86400."
+            )
         self.value = value
 
     def __int__(self):
@@ -341,7 +343,7 @@ class SikuV1Api:
         result = await self._translate_response(hexlist)
         return await self._format_response(result)
 
-    async def power_on(self) -> None:
+    async def power_on(self) -> dict:
         """Power on fan."""
         data = await self._control_packet([("status", None)])
         hexlist = await self._send_command(data)
@@ -353,7 +355,7 @@ class SikuV1Api:
             LOGGER.info("Power ON fan : %s", result["operation_mode"])
         return await self._format_response(result)
 
-    async def power_off(self) -> None:
+    async def power_off(self) -> dict:
         """Power off fan."""
         data = await self._control_packet([("status", None)])
         hexlist = await self._send_command(data)
@@ -365,7 +367,7 @@ class SikuV1Api:
             LOGGER.info("Power OFF fan : %s", result["operation_mode"])
         return await self._format_response(result)
 
-    async def speed(self, speed: str | int) -> None:
+    async def speed(self, speed: str | int) -> dict:
         """Set fan speed."""
         speed = SpeedSelection(int(speed))
         data = await self._control_packet([("speed", speed)])
@@ -374,16 +376,21 @@ class SikuV1Api:
         LOGGER.info("Set speed to %s : %s", speed, result["speed"])
         return await self._format_response(result)
 
-    async def speed_manual(self, speed: int) -> None:
+    async def speed_manual(self, percentage: int) -> dict:
         """Set fan speed."""
-        speed = percentage_to_ranged_value(SPEED_MANUAL_MIN, SPEED_MANUAL_MAX, speed)
+        low_high_range = (float(SPEED_MANUAL_MIN), float(SPEED_MANUAL_MAX))
+        speed: int = int(
+            percentage_to_ranged_value(
+                low_high_range=low_high_range, percentage=float(percentage)
+            )
+        )
         data = await self._control_packet([("manual_speed", speed)])
         hexlist = await self._send_command(data)
         result = await self._translate_response(hexlist)
         LOGGER.info("Set manual speed to %s : %s", speed, result["manual_speed"])
         return await self._format_response(result)
 
-    async def direction(self, direction: str) -> None:
+    async def direction(self, direction: str) -> dict:
         """Set fan direction."""
         # if direction is in DIRECTIONS values translate it to the key value
         # TODO: needs cleanup
@@ -400,7 +407,7 @@ class SikuV1Api:
         LOGGER.info("Set direction to %s : %s", direction, result["direction"])
         return await self._format_response(result)
 
-    async def sleep(self) -> None:
+    async def sleep(self) -> dict:
         """Set fan to sleep mode."""
         await self.power_on()
         data = await self._control_packet([("timer", Timer.NIGHT)])
@@ -409,7 +416,7 @@ class SikuV1Api:
         LOGGER.info("Set sleep mode : %s", result["operation_mode"])
         return await self._format_response(result)
 
-    async def party(self) -> None:
+    async def party(self) -> dict:
         """Set fan to party mode."""
         await self.power_on()
         data = await self._control_packet([("timer", Timer.PARTY)])
@@ -431,7 +438,7 @@ class SikuV1Api:
         )
         return await self._format_response(result)
 
-    async def reset_filter_alarm(self) -> None:
+    async def reset_filter_alarm(self) -> dict:
         """Reset filter alarm."""
         await self.power_on()
         data = await self._control_packet([("reset_filter_alarm", None)])
@@ -502,6 +509,7 @@ class SikuV1Api:
                     raise TimeoutError(
                         "Failed to send command after 3 attempts"
                     ) from ex
+        raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
     async def _translate_response(self, hexlist: list[str]) -> dict:
         """Translate response from fan controller."""
