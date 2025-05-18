@@ -4,9 +4,7 @@
   "image": "mcr.microsoft.com/vscode/devcontainers/python:3.13-bookworm",
   "postCreateCommand": "scripts/setup",
   "waitFor": "postCreateCommand",
-  "forwardPorts": [
-    8123
-  ],
+  "forwardPorts": [8123],
   "portsAttributes": {
     "8123": {
       "label": "Home Assistant",
@@ -29,7 +27,8 @@
         "files.eol": "\n",
         "editor.tabSize": 4,
         "python.pythonPath": "/usr/local/bin/python3",
-        "python.analysis.autoSearchPaths": false,
+        // "python.analysis.nodeExecutable": "auto",
+        "python.analysis.autoSearchPaths": true,
         "python.analysis.typeCheckingMode": "standard",
         "editor.formatOnPaste": false,
         "editor.formatOnSave": true,
@@ -38,5 +37,8 @@
       }
     }
   },
-  "remoteUser": "vscode"
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=8192"
+  }
 }

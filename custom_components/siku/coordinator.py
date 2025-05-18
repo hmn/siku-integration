@@ -9,7 +9,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.const import CONF_PASSWORD
 from homeassistant.const import CONF_PORT
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -54,6 +53,7 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
             logger=LOGGER,
             name=name,
             update_interval=timedelta(seconds=30),
+            update_method=self._update_method,
         )
 
     @property
@@ -66,11 +66,10 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
             name=self.name or f"{DEFAULT_NAME} {self.api.host}",
         )
 
-    async def _async_update_data(self) -> dict[Platform, dict[str, int | str]]:
+    async def _update_method(self) -> dict[str, int | str]:
         """Get the latest data from Siku fan and updates the state."""
-        data = {}
         try:
-            data = await self.api.status()
+            data: dict = await self.api.status()
             # self.logger.debug(data)
             # TODO: add better test options
             # TEST
@@ -87,6 +86,6 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
             #     "alarm": False,
             #     "version": "2",
             # }
-        except (TimeoutError, OSError) as ex:
+            return data
+        except (TimeoutError, OSError, LookupError) as ex:
             raise UpdateFailed(f"Connection to Siku Fan failed: {ex}") from ex
-        return data

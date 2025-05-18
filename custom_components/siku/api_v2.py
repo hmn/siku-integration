@@ -82,8 +82,8 @@ MODES = {
 
 EMPTY_VALUE = "00"
 
-SPEED_MANUAL_MIN = 0
-SPEED_MANUAL_MAX = 255
+SPEED_MANUAL_MIN: int = 0
+SPEED_MANUAL_MAX: int = 255
 
 
 class SikuV2Api:
@@ -118,19 +118,19 @@ class SikuV2Api:
         data = await self._parse_response(hexlist)
         return await self._translate_response(data)
 
-    async def power_on(self) -> None:
+    async def power_on(self) -> dict:
         """Power on fan."""
         cmd = f"{COMMAND_ON_OFF}{POWER_ON}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
-    async def power_off(self) -> None:
+    async def power_off(self) -> dict:
         """Power off fan."""
         cmd = f"{COMMAND_ON_OFF}{POWER_OFF}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
-    async def speed(self, speed: str) -> None:
+    async def speed(self, speed: str) -> dict:
         """Set fan speed."""
         if speed not in FAN_SPEEDS:
             raise ValueError(f"Invalid fan speed: {speed}")
@@ -138,14 +138,19 @@ class SikuV2Api:
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
-    async def speed_manual(self, speed: str) -> None:
+    async def speed_manual(self, percentage: int) -> dict:
         """Set manual fan speed."""
-        speed = percentage_to_ranged_value(SPEED_MANUAL_MIN, SPEED_MANUAL_MAX, speed)
+        low_high_range = (float(SPEED_MANUAL_MIN), float(SPEED_MANUAL_MAX))
+        speed: int = int(
+            percentage_to_ranged_value(
+                low_high_range=low_high_range, percentage=float(percentage)
+            )
+        )
         cmd = f"{COMMAND_MANUAL_SPEED}{speed}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
-    async def direction(self, direction: str) -> None:
+    async def direction(self, direction: str) -> dict:
         """Set fan direction."""
         # if direction is in DIRECTIONS values translate it to the key value
         if direction in DIRECTIONS.values():
@@ -158,19 +163,19 @@ class SikuV2Api:
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
-    async def sleep(self) -> None:
+    async def sleep(self) -> dict:
         """Set fan to sleep mode."""
         cmd = f"{COMMAND_ON_OFF}{POWER_ON}{COMMAND_MODE}{MODE_SLEEP}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
-    async def party(self) -> None:
+    async def party(self) -> dict:
         """Set fan to party mode."""
         cmd = f"{COMMAND_ON_OFF}{POWER_ON}{COMMAND_MODE}{MODE_PARTY}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
-    async def reset_filter_alarm(self) -> None:
+    async def reset_filter_alarm(self) -> dict:
         """Reset filter alarm."""
         cmd = f"{COMMAND_RESET_ALARMS}{EMPTY_VALUE}{COMMAND_RESET_FILTER_TIMER}{EMPTY_VALUE}".upper()
         await self._send_command(FUNC_WRITE, cmd)
@@ -266,6 +271,7 @@ class SikuV2Api:
                 LOGGER.warning("Timeout occurred, retrying... (%d/3)", attempt + 1)
                 if attempt == 2:
                     raise TimeoutError("Failed to send command after 3 attempts")
+        raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
     async def _translate_response(self, data: dict) -> dict:
         """Translate response data to dict."""
