@@ -14,13 +14,9 @@ from custom_components.siku.api_v1 import (
     TimerSeconds,
     HumiditySensorThreshold,
     HumidityLevel,
-    ZeroTenVoltThreshold,
     NoYes,
     NoYesYes,
-    CONTROL,
-    FEEDBACK,
     SPEED_MANUAL_MIN,
-    SPEED_MANUAL_MAX,
 )
 
 # ruff: noqa: D103
