@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from custom_components.siku.api_v2 import SikuV2Api
+from custom_components.siku.api_v2 import SPEED_MANUAL_MAX, SPEED_MANUAL_MIN, SikuV2Api
 from custom_components.siku.const import (
     FAN_SPEEDS,
     DIRECTIONS,
@@ -38,6 +38,123 @@ async def test_status(api):
         result = await api.status()
         assert result["is_on"] is True
         assert result["speed"] == "01"
+
+
+@pytest.mark.asyncio
+async def test_status_manual(api):
+    with patch.object(
+        api,
+        "_send_command",
+        new=AsyncMock(
+            return_value=[
+                "FD",
+                "FD",
+                "02",
+                "10",
+                "30",
+                "30",
+                "32",
+                "45",
+                "30",
+                "30",
+                "32",
+                "32",
+                "35",
+                "37",
+                "34",
+                "36",
+                "35",
+                "37",
+                "30",
+                "34",
+                "08",
+                "44",
+                "65",
+                "52",
+                "6F",
+                "6F",
+                "73",
+                "32",
+                "34",
+                "06",
+                "FE",
+                "02",
+                "B9",
+                "03",
+                "00",
+                "01",
+                "01",
+                "02",
+                "02",
+                "44",
+                "7C",
+                "B7",
+                "01",
+                "06",
+                "00",
+                "07",
+                "00",
+                "FE",
+                "03",
+                "0B",
+                "00",
+                "00",
+                "00",
+                "25",
+                "33",
+                "FE",
+                "02",
+                "4A",
+                "84",
+                "03",
+                "FE",
+                "04",
+                "64",
+                "2F",
+                "0F",
+                "55",
+                "00",
+                "83",
+                "00",
+                "FE",
+                "06",
+                "86",
+                "00",
+                "09",
+                "08",
+                "07",
+                "E8",
+                "07",
+                "9C",
+                "11",
+            ]
+        ),
+    ):
+        result = await api.status()
+        assert result["is_on"] is True
+        assert result["speed"] == "02"
+        assert result["manual_speed_selected"] is True
+        # check that manual speed is in range and is equal to the calculated value 49%
+        assert result["manual_speed"] >= SPEED_MANUAL_MIN
+        assert result["manual_speed"] <= SPEED_MANUAL_MAX
+        assert result["manual_speed"] == int(
+            SPEED_MANUAL_MAX / SPEED_MANUAL_MIN * 49 / 100
+        )
+        assert result["manual_speed_low_high_range"] == (
+            SPEED_MANUAL_MIN,
+            SPEED_MANUAL_MAX,
+        )
+        assert result["oscillating"] is False
+        assert result["direction"] == "alternating"
+        assert result["boost"] is False
+        assert result["mode"] == "auto"
+        assert result["humidity"] == 51
+        assert result["rpm"] == 900
+        assert result["firmware"] == "0.7"
+        assert result["filter_timer_days"] == 5115
+        assert result["timer_countdown"] == 0
+        assert result["alarm"] is False
+        assert result["version"] == "2"
 
 
 @pytest.mark.asyncio
