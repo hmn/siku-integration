@@ -142,11 +142,13 @@ class SikuV2Api:
         """Set manual fan speed."""
         low_high_range = (float(SPEED_MANUAL_MIN), float(SPEED_MANUAL_MAX))
         speed: int = int(
-            percentage_to_ranged_value(
-                low_high_range=low_high_range, percentage=float(percentage)
+            round(
+                percentage_to_ranged_value(
+                    low_high_range=low_high_range, percentage=float(percentage)
+                )
             )
         )
-        cmd = f"{COMMAND_MANUAL_SPEED}{speed}".upper()
+        cmd = f"{COMMAND_MANUAL_SPEED}{speed:02X}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 

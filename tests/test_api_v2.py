@@ -204,6 +204,35 @@ async def test_speed_manual(api):
 
 
 @pytest.mark.asyncio
+async def test_speed_manual_hex_formatting_bug(api):
+    """Test that speed_manual correctly formats the speed value as hexadecimal.
+
+    This test verifies the fix for the bug where integer speed values were incorrectly
+    concatenated as decimal strings instead of being formatted as hex.
+    For example, speed 123 (decimal) should be formatted as "7B" (hex).
+    The command should be "447B" (44 is COMMAND_MANUAL_SPEED, 7B is hex for 123).
+    """
+    with (
+        patch.object(api, "_send_command", new=AsyncMock()) as mock_send,
+        patch.object(api, "status", new=AsyncMock(return_value={"manual_speed": 123})),
+    ):
+        # 48.6% of 255 ≈ 123, which should be formatted as hex "7B"
+        result = await api.speed_manual(48.6)
+
+        # Verify that _send_command was called with the correct hex-formatted command
+        mock_send.assert_called_once()
+        call_args = mock_send.call_args[0]
+        command_data = call_args[1]  # Second argument is the data
+
+        # The command should be "447B" (COMMAND_MANUAL_SPEED + hex(123))
+        # not "44123" (COMMAND_MANUAL_SPEED + decimal 123)
+        assert command_data == "447B", f"Expected '447B' but got: {command_data}"
+
+        # Verify the result
+        assert result["manual_speed"] == 123
+
+
+@pytest.mark.asyncio
 async def test_direction_valid(api):
     with (
         patch.object(api, "_send_command", new=AsyncMock()),
