@@ -1,8 +1,9 @@
 """Helper api function for sending commands to the fan controller."""
 
 import logging
-import socket
+import asyncio
 from homeassistant.util.percentage import percentage_to_ranged_value
+from .udp import AsyncUdpClient
 
 from .const import DIRECTION_ALTERNATING
 from .const import DIRECTIONS
@@ -95,6 +96,8 @@ class SikuV2Api:
         self.port = port
         self.idnum = idnum
         self.password = password
+        self._udp = AsyncUdpClient(self.host, self.port)
+        self._lock = asyncio.Lock()
 
     async def status(self) -> dict:
         """Get status from fan controller."""
@@ -228,51 +231,38 @@ class SikuV2Api:
         return packet_str
 
     async def _send_command(self, func: str, data: str) -> list[str]:
-        """Send command to fan controller."""
-        # enter the data content of the UDP packet as hex
+        """Send command to fan controller using asyncio UDP transport."""
         packet_str = self._build_packet(func, data)
         packet_data = bytes.fromhex(packet_str)
 
-        for attempt in range(3):  # Retry up to 3 times
+        for attempt in range(3):
             try:
-                # initialize a socket, think of it as a cable
-                # SOCK_DGRAM specifies that this is UDP
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
-                    s.settimeout(1)
-                    server_address = (self.host, self.port)
-                    LOGGER.debug(
-                        'sending "%s" size(%s) to %s',
-                        packet_data.hex(),
-                        len(packet_data),
-                        server_address,
-                    )
-                    s.sendto(packet_data, server_address)
+                if func == FUNC_WRITE:
+                    LOGGER.debug("write command, no response expected")
+                    async with self._lock:
+                        await self._udp.send_only(packet_data)
+                    return []
 
-                    if func == FUNC_WRITE:
-                        LOGGER.debug("write command, no response expected")
-                        s.close()
-                        return []
+                async with self._lock:
+                    result_data = await self._udp.request(packet_data, timeout=2.0)
+                result_str = result_data.hex().upper()
+                LOGGER.debug("receive string: %s", result_str)
 
-                    # Receive response
-                    result_data, server = s.recvfrom(4096)
-                    LOGGER.debug(
-                        'received "%s" size(%s) from %s',
-                        result_data,
-                        len(result_data),
-                        server,
-                    )
-                    result_str = result_data.hex().upper()
-                    LOGGER.debug("receive string: %s", result_str)
-
-                    result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
-                    if not self._verify_checksum(result_hexlist):
-                        raise ValueError("Checksum error")
-                    LOGGER.debug("returning hexlist %s", result_hexlist)
-                    return result_hexlist
-            except TimeoutError:
-                LOGGER.warning("Timeout occurred, retrying... (%d/3)", attempt + 1)
+                result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
+                if not self._verify_checksum(result_hexlist):
+                    raise ValueError("Checksum error")
+                LOGGER.debug("returning hexlist %s", result_hexlist)
+                return result_hexlist
+            except (asyncio.TimeoutError, TimeoutError) as ex:
+                LOGGER.warning(
+                    "Timeout occurred (%s), retrying... (%d/3)",
+                    type(ex).__name__,
+                    attempt + 1,
+                )
                 if attempt == 2:
-                    raise TimeoutError("Failed to send command after 3 attempts")
+                    raise TimeoutError(
+                        "Failed to send command after 3 attempts"
+                    ) from ex
         raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
     async def _translate_response(self, data: dict) -> dict:

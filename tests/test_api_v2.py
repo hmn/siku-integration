@@ -1,5 +1,6 @@
 """Tests for SikuV2Api."""
 
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from custom_components.siku.api_v2 import SPEED_MANUAL_MAX, SPEED_MANUAL_MIN, SikuV2Api
@@ -301,26 +302,24 @@ async def test_reset_filter_alarm(api):
 
 @pytest.mark.asyncio
 async def test_send_command_timeout(api):
-    with patch("socket.socket") as mock_socket:
-        mock_sock = MagicMock()
-        mock_socket.return_value.__enter__.return_value = mock_sock
-        mock_sock.recvfrom.side_effect = TimeoutError
-        with pytest.raises(TimeoutError):
-            await api._send_command("01", "deadbeef")
+    with (
+        patch.object(
+            api._udp, "request", new=AsyncMock(side_effect=asyncio.TimeoutError)
+        ),
+        pytest.raises(TimeoutError),
+    ):
+        await api._send_command("01", "deadbeef")
 
 
 @pytest.mark.asyncio
 async def test_send_command_checksum_error(api):
     # Patch _verify_checksum to return False
     with (
-        patch("socket.socket") as mock_socket,
+        patch.object(api._udp, "request", new=AsyncMock(return_value=b"deadbeef")),
         patch.object(api, "_verify_checksum", return_value=False),
+        pytest.raises(ValueError),
     ):
-        mock_sock = MagicMock()
-        mock_socket.return_value.__enter__.return_value = mock_sock
-        mock_sock.recvfrom.return_value = (b"deadbeef", ("127.0.0.1", 12345))
-        with pytest.raises(ValueError):
-            await api._send_command("01", "deadbeef")
+        await api._send_command("01", "deadbeef")
 
 
 def test_checksum_and_hexlist(api):

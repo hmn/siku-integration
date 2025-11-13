@@ -15,7 +15,9 @@ Example:
 
 import argparse
 import logging
+import random
 import socket
+import time
 from datetime import datetime
 
 # Protocol constants
@@ -71,10 +73,11 @@ LOGGER = logging.getLogger(__name__)
 class FakeFanController:
     """Simulates a Siku fan controller."""
 
-    def __init__(self, device_id: str, password: str):
+    def __init__(self, device_id: str, password: str, slow_mode: bool = False):
         """Initialize the fake fan controller."""
         self.device_id = device_id
         self.password = password
+        self.slow_mode = slow_mode
 
         # Fan state
         self.is_on = False
@@ -95,6 +98,8 @@ class FakeFanController:
         LOGGER.info("Fake fan controller initialized")
         LOGGER.info(f"  Device ID: {self.device_id}")
         LOGGER.info(f"  Password: {self.password}")
+        if self.slow_mode:
+            LOGGER.info("  Slow mode: ENABLED (2-5 second delays)")
 
     def _checksum(self, data: str) -> str:
         """Calculate checksum for packet."""
@@ -365,6 +370,12 @@ class FakeFanController:
 
     def process_packet(self, data: bytes) -> bytes | None:
         """Process received packet and return response."""
+        # Apply random delay if slow mode is enabled
+        if self.slow_mode:
+            delay = random.uniform(1.0, 5.0)
+            LOGGER.info(f"Slow mode: delaying response by {delay:.2f} seconds...")
+            time.sleep(delay)
+
         hex_str = data.hex().upper()
         hexlist = [hex_str[i : i + 2] for i in range(0, len(hex_str), 2)]
 
@@ -448,6 +459,11 @@ Examples:
         "--password", default="1234", help="Device password (default: 1234)"
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "--slow",
+        action="store_true",
+        help="Enable slow mode (random 1-10 second delays in responses)",
+    )
 
     args = parser.parse_args()
 
@@ -455,7 +471,7 @@ Examples:
         LOGGER.setLevel(logging.DEBUG)
 
     # Create fake fan controller
-    fan = FakeFanController(args.device_id, args.password)
+    fan = FakeFanController(args.device_id, args.password, args.slow)
 
     # Create UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
