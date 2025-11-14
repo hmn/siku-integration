@@ -5,4 +5,5 @@ ruff
 pytest
 pytest-homeassistant-custom-component
 pytest-asyncio
+watchfiles
 git+https://github.com/boto/botocore

@@ -5,7 +5,15 @@
       "label": "Run Home Assistant on port 8123",
       "type": "shell",
       "command": "scripts/develop",
-      "problemMatcher": []
+      "problemMatcher": [],
+      "isBackground": true
+    },
+    {
+      "label": "Run Home Assistant with Auto-Reload",
+      "type": "shell",
+      "command": "scripts/develop-watch",
+      "problemMatcher": [],
+      "isBackground": true
     },
     {
       "label": "Lint using ruff",
