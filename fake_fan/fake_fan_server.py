@@ -81,7 +81,7 @@ class FakeFanController:
 
         # Fan state
         self.is_on = False
-        self.speed = "03"  # Speed 3 (1-10)
+        self.speed = "01"  # Speed 1-3 (255 = manual)
         self.manual_speed = "80"  # Manual speed 0-255 (128 = ~50%)
         self.direction = "00"  # 00=forward, 01=reverse, 02=alternating
         self.boost = False

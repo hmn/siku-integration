@@ -151,7 +151,7 @@ class SikuV2Api:
                 )
             )
         )
-        cmd = f"{COMMAND_MANUAL_SPEED}{speed:02X}".upper()
+        cmd = f"{COMMAND_SPEED}FF{COMMAND_MANUAL_SPEED}{speed:02X}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
@@ -275,7 +275,7 @@ class SikuV2Api:
         try:
             speed = f"{int(data[COMMAND_SPEED], 16):02}"
         except KeyError:
-            speed = "FF"
+            speed = "255"
         try:
             manual_speed = f"{int(data[COMMAND_MANUAL_SPEED], 16):02}"
         except KeyError:
@@ -339,9 +339,12 @@ class SikuV2Api:
             "is_on": is_on,
             "speed": speed,
             "speed_list": FAN_SPEEDS,
-            "manual_speed_selected": bool(speed == "FF" or manual_speed != "00"),
+            "manual_speed_selected": bool(speed == "255"),
             "manual_speed": int(manual_speed),
-            "manual_speed_low_high_range": (SPEED_MANUAL_MIN, SPEED_MANUAL_MAX),
+            "manual_speed_low_high_range": (
+                float(SPEED_MANUAL_MIN),
+                float(SPEED_MANUAL_MAX),
+            ),
             "oscillating": oscillating,
             "direction": direction,
             "boost": boost,

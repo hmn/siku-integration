@@ -86,7 +86,7 @@ async def test_status_manual(api):
                 "01",
                 "01",
                 "02",
-                "02",
+                "FF",
                 "44",
                 "7C",
                 "B7",
@@ -133,7 +133,7 @@ async def test_status_manual(api):
     ):
         result = await api.status()
         assert result["is_on"] is True
-        assert result["speed"] == "02"
+        assert result["speed"] == "255"
         assert result["manual_speed_selected"] is True
         # check that manual speed is in range and is equal to the calculated value 49%
         assert result["manual_speed"] >= SPEED_MANUAL_MIN
@@ -227,7 +227,9 @@ async def test_speed_manual_hex_formatting_bug(api):
 
         # The command should be "447B" (COMMAND_MANUAL_SPEED + hex(123))
         # not "44123" (COMMAND_MANUAL_SPEED + decimal 123)
-        assert command_data == "447B", f"Expected '447B' but got: {command_data}"
+        assert command_data == "02FF447B", (
+            f"Expected '02FF447B' but got: {command_data}"
+        )
 
         # Verify the result
         assert result["manual_speed"] == 123

@@ -4,6 +4,7 @@ from enum import IntEnum
 import logging
 import asyncio
 from types import NoneType
+from typing import Literal
 from .udp import AsyncUdpClient
 from homeassistant.util.percentage import percentage_to_ranged_value
 
@@ -22,8 +23,10 @@ class SpeedSelection(IntEnum):
     LOW = 1
     MEDIUM = 2
     HIGH = 3
+    MANUAL = 4
 
 
+SPEED_MANUAL_LOW: int = 0
 SPEED_MANUAL_MIN: int = 22
 SPEED_MANUAL_MAX: int = 255
 
@@ -40,6 +43,12 @@ class SpeedManual:
     def __int__(self):
         """Return the value."""
         return self.value
+
+    def to_bytes(
+        self, length: int, byteorder: Literal["big", "little"] = "big"
+    ) -> bytes:
+        """Convert to bytes."""
+        return self.value.to_bytes(length, byteorder=byteorder)
 
 
 class Direction(IntEnum):
@@ -372,25 +381,34 @@ class SikuV1Api:
 
     async def speed(self, speed: str | int) -> dict:
         """Set fan speed."""
-        speed = SpeedSelection(int(speed))
-        data = await self._control_packet([("speed", speed)])
+        _speed: SpeedSelection = SpeedSelection(int(speed))
+        data = await self._control_packet([("speed", _speed)])
         hexlist = await self._send_command(data)
         result = await self._translate_response(hexlist)
-        LOGGER.info("Set speed to %s : %s", speed, result["speed"])
         return await self._format_response(result)
 
     async def speed_manual(self, percentage: int) -> dict:
-        """Set fan speed."""
-        low_high_range = (float(SPEED_MANUAL_MIN), float(SPEED_MANUAL_MAX))
-        speed: int = int(
-            percentage_to_ranged_value(
-                low_high_range=low_high_range, percentage=float(percentage)
+        """Set manual fan speed."""
+        if percentage < 9:
+            percentage = 9
+        if percentage > 100:
+            percentage = 100
+        low_high_range = (float(SPEED_MANUAL_LOW), float(SPEED_MANUAL_MAX))
+        _speed: SpeedManual = SpeedManual(
+            int(
+                percentage_to_ranged_value(
+                    low_high_range=low_high_range, percentage=float(percentage)
+                )
             )
         )
-        data = await self._control_packet([("manual_speed", speed)])
+        data = await self._control_packet(
+            [
+                ("speed", SpeedSelection.MANUAL),
+                ("manual_speed", _speed),
+            ]
+        )
         hexlist = await self._send_command(data)
         result = await self._translate_response(hexlist)
-        LOGGER.info("Set manual speed to %s : %s", speed, result["manual_speed"])
         return await self._format_response(result)
 
     async def direction(self, direction: str | int) -> dict:
@@ -462,7 +480,7 @@ class SikuV1Api:
                 raise ValueError(f"Invalid command: {command}")
             if not isinstance(value, CONTROL[command]["value"]):
                 raise TypeError(
-                    f"Invalid value for command {command}: {type(value)} must be of type {CONTROL[command]['value']}"
+                    f"Invalid value {value} for command {command}: got {type(value)} but must be of type {CONTROL[command]['value']}"
                 )
 
             # packet_command = bytes.fromhex(command)
@@ -554,10 +572,15 @@ class SikuV1Api:
         return {
             "is_on": bool(data["status"] == OffOn.ON),
             "speed": int(data["speed"]),
-            "speed_list": list(map(int, SpeedSelection)),
+            "speed_list": [
+                int(s) for s in SpeedSelection if s != SpeedSelection.MANUAL
+            ],
             "manual_speed_selected": bool(data["speed"] == SpeedSelected.MANUAL),
             "manual_speed": int(data["manual_speed"]),
-            "manual_speed_low_high_range": (SPEED_MANUAL_MIN, SPEED_MANUAL_MAX),
+            "manual_speed_low_high_range": (
+                float(SPEED_MANUAL_LOW),
+                float(SPEED_MANUAL_MAX),
+            ),
             "oscillating": bool(data["direction"] == Direction.HEAT_RECOVERY),
             "direction": (
                 data["direction"]
