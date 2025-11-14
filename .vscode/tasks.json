@@ -12,6 +12,12 @@
       "type": "shell",
       "command": "scripts/lint",
       "problemMatcher": []
+    },
+    {
+      "label": "Test using pytest",
+      "type": "shell",
+      "command": "pytest",
+      "problemMatcher": []
     }
   ]
 }
