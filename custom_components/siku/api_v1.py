@@ -1,6 +1,7 @@
 """Helper api function for sending commands to the fan controller."""
 
 from enum import IntEnum
+import time
 import logging
 import asyncio
 from types import NoneType
@@ -503,11 +504,26 @@ class SikuV1Api:
     async def _send_command(self, data: bytes) -> list[str]:
         """Send command to fan controller using asyncio UDP transport."""
         packet_data = COMMAND_PACKET_PREFIX + data + COMMAND_PACKET_POSTFIX
+        packet_hex = packet_data.hex().upper()
 
         for attempt in range(3):
+            start_time = time.time()
             try:
+                LOGGER.debug(
+                    "[%s:%d] Sending request (attempt %d/3)",
+                    self.host,
+                    self.port,
+                    attempt + 1,
+                )
                 async with self._lock:
-                    data_bytes = await self._udp.request(packet_data, timeout=2.0)
+                    data_bytes = await self._udp.request(packet_data)
+                elapsed = time.time() - start_time
+                LOGGER.debug(
+                    "[%s:%d] Request completed in %.3f seconds",
+                    self.host,
+                    self.port,
+                    elapsed,
+                )
                 # Match feedback packet prefix and cut from the data
                 if data_bytes.startswith(FEEDBACK_PACKET_PREFIX):
                     data_bytes = data_bytes[len(FEEDBACK_PACKET_PREFIX) :]
@@ -516,14 +532,21 @@ class SikuV1Api:
                 LOGGER.debug("returning hexlist %s", hexlist)
                 return hexlist
             except (asyncio.TimeoutError, TimeoutError) as ex:
+                elapsed = time.time() - start_time
                 LOGGER.warning(
-                    "Timeout occurred (%s), retrying... (%d/3)",
-                    type(ex).__name__,
+                    "[%s:%d] Request timed out after %.3f seconds (attempt %d/3). "
+                    "Packet: %s, Error: %s",
+                    self.host,
+                    self.port,
+                    elapsed,
                     attempt + 1,
+                    packet_hex[:40] + "..." if len(packet_hex) > 40 else packet_hex,
+                    type(ex).__name__,
                 )
                 if attempt == 2:
                     raise TimeoutError(
-                        "Failed to send command after 3 attempts"
+                        f"Failed to send command to {self.host}:{self.port} "
+                        f"after 3 attempts (total time: {elapsed:.3f}s)"
                     ) from ex
         raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 

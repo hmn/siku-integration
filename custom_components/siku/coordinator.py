@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -68,24 +69,30 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _update_method(self) -> dict[str, int | str]:
         """Get the latest data from Siku fan and updates the state."""
+        start_time = time.time()
         try:
             data: dict = await self.api.status()
-            # self.logger.debug(data)
-            # TODO: add better test options
-            # TEST
-            # data = {
-            #     "is_on": False,
-            #     "speed": "00",
-            #     "oscillating": False,
-            #     "direction": None,
-            #     "mode": PRESET_MODE_PARTY,
-            #     "humidity": 50 + randint(0, 50),
-            #     "rpm": 1000 + randint(0, 1000),
-            #     "firmware": "0.0",
-            #     "filter_timer": 1440 * 30 + 65,
-            #     "alarm": False,
-            #     "version": "2",
-            # }
+            elapsed = time.time() - start_time
+            self.logger.debug(
+                "Fetched status from %s:%d in %.3f seconds",
+                self.api.host,
+                self.api.port,
+                elapsed,
+            )
             return data
-        except (TimeoutError, OSError, LookupError) as ex:
-            raise UpdateFailed(f"Connection to Siku Fan failed: {ex}") from ex
+        except TimeoutError as ex:
+            elapsed = time.time() - start_time
+            error_msg = (
+                f"Timeout connecting to Siku Fan at {self.api.host}:{self.api.port} "
+                f"after {elapsed:.3f}s: {ex}"
+            )
+            self.logger.error(error_msg)
+            raise UpdateFailed(error_msg) from ex
+        except (OSError, LookupError) as ex:
+            elapsed = time.time() - start_time
+            error_msg = (
+                f"Connection to Siku Fan at {self.api.host}:{self.api.port} failed "
+                f"after {elapsed:.3f}s: {ex}"
+            )
+            self.logger.error(error_msg)
+            raise UpdateFailed(error_msg) from ex

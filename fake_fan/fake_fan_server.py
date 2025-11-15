@@ -372,7 +372,7 @@ class FakeFanController:
         """Process received packet and return response."""
         # Apply random delay if slow mode is enabled
         if self.slow_mode:
-            delay = random.uniform(1.0, 5.0)
+            delay = random.uniform(1.0, 10.0)
             LOGGER.info(f"Slow mode: delaying response by {delay:.2f} seconds...")
             time.sleep(delay)
 

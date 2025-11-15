@@ -6,8 +6,11 @@ support for fire-and-forget send.
 """
 
 from __future__ import annotations
-
+import time
 import asyncio
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 
 class _UdpProtocol(asyncio.DatagramProtocol):
@@ -80,10 +83,37 @@ class AsyncUdpClient:
         await self.ensure_transport()
         assert self._protocol is not None
         async with self._lock:
-            data, _ = await self._protocol.request(
-                payload, timeout, (self._host, self._port)
-            )
-            return data
+            start_time = time.time()
+            try:
+                LOGGER.debug(
+                    "[UDP %s:%d] Sending %d bytes, waiting for response (timeout=%.1fs)",
+                    self._host,
+                    self._port,
+                    len(payload),
+                    timeout,
+                )
+                data, _ = await self._protocol.request(
+                    payload, timeout, (self._host, self._port)
+                )
+                elapsed = time.time() - start_time
+                LOGGER.debug(
+                    "[UDP %s:%d] Received %d bytes in %.3f seconds",
+                    self._host,
+                    self._port,
+                    len(data),
+                    elapsed,
+                )
+                return data
+            except asyncio.TimeoutError:
+                elapsed = time.time() - start_time
+                LOGGER.warning(
+                    "[UDP %s:%d] No response received after %.3f seconds (timeout=%.1fs)",
+                    self._host,
+                    self._port,
+                    elapsed,
+                    timeout,
+                )
+                raise
 
     async def send_only(self, payload: bytes) -> None:
         """Send a payload without waiting for a response."""

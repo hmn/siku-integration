@@ -1,5 +1,6 @@
 """Helper api function for sending commands to the fan controller."""
 
+import time
 import logging
 import asyncio
 from homeassistant.util.percentage import percentage_to_ranged_value
@@ -235,16 +236,49 @@ class SikuV2Api:
         packet_str = self._build_packet(func, data)
         packet_data = bytes.fromhex(packet_str)
 
+        # Map function codes to readable names for logging
+        func_names = {
+            FUNC_READ: "READ",
+            FUNC_WRITE: "WRITE",
+            FUNC_READ_WRITE: "READ_WRITE",
+            FUNC_INC: "INCREMENT",
+            FUNC_DEC: "DECREMENT",
+        }
+        func_name = func_names.get(func, f"UNKNOWN({func})")
+
         for attempt in range(3):
+            start_time = time.time()
             try:
                 if func == FUNC_WRITE:
                     LOGGER.debug("write command, no response expected")
                     async with self._lock:
                         await self._udp.send_only(packet_data)
+                    elapsed = time.time() - start_time
+                    LOGGER.debug(
+                        "[%s:%d] WRITE command completed in %.3f seconds",
+                        self.host,
+                        self.port,
+                        elapsed,
+                    )
                     return []
 
+                LOGGER.debug(
+                    "[%s:%d] Sending %s request (attempt %d/3)",
+                    self.host,
+                    self.port,
+                    func_name,
+                    attempt + 1,
+                )
                 async with self._lock:
-                    result_data = await self._udp.request(packet_data, timeout=2.0)
+                    result_data = await self._udp.request(packet_data)
+                elapsed = time.time() - start_time
+                LOGGER.debug(
+                    "[%s:%d] %s request completed in %.3f seconds",
+                    self.host,
+                    self.port,
+                    func_name,
+                    elapsed,
+                )
                 result_str = result_data.hex().upper()
                 LOGGER.debug("receive string: %s", result_str)
 
@@ -254,14 +288,22 @@ class SikuV2Api:
                 LOGGER.debug("returning hexlist %s", result_hexlist)
                 return result_hexlist
             except (asyncio.TimeoutError, TimeoutError) as ex:
+                elapsed = time.time() - start_time
                 LOGGER.warning(
-                    "Timeout occurred (%s), retrying... (%d/3)",
-                    type(ex).__name__,
+                    "[%s:%d] %s request timed out after %.3f seconds (attempt %d/3). "
+                    "Packet: %s, Error: %s",
+                    self.host,
+                    self.port,
+                    func_name,
+                    elapsed,
                     attempt + 1,
+                    packet_str[:40] + "..." if len(packet_str) > 40 else packet_str,
+                    type(ex).__name__,
                 )
                 if attempt == 2:
                     raise TimeoutError(
-                        "Failed to send command after 3 attempts"
+                        f"Failed to send {func_name} command to {self.host}:{self.port} "
+                        f"after 3 attempts (total time: {elapsed:.3f}s)"
                     ) from ex
         raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
