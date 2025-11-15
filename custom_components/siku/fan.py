@@ -16,13 +16,15 @@ from homeassistant.util.percentage import percentage_to_ordered_list_item
 from homeassistant.util.percentage import ranged_value_to_percentage
 
 from . import SikuEntity
-from .const import DEFAULT_NAME
+from .const import DEFAULT_NAME, DIRECTION_FORWARD, DIRECTIONS
 from .const import DOMAIN
 from .const import FAN_SPEEDS
 from .const import PRESET_MODE_AUTO
+from .const import PRESET_MODE_MANUAL
 from .const import PRESET_MODE_ON
 from .const import PRESET_MODE_PARTY
 from .const import PRESET_MODE_SLEEP
+from .const import DIRECTION_ALTERNATING
 from .coordinator import SikuDataUpdateCoordinator
 
 LOGGER = logging.getLogger(__name__)
@@ -64,6 +66,7 @@ class SikuFan(SikuEntity, FanEntity):
     )
     _attr_preset_modes = [
         PRESET_MODE_AUTO,
+        PRESET_MODE_MANUAL,
         PRESET_MODE_ON,
         PRESET_MODE_PARTY,
         PRESET_MODE_SLEEP,
@@ -88,25 +91,43 @@ class SikuFan(SikuEntity, FanEntity):
     @property
     def speed_count(self) -> int:
         """Return the number of speeds the fan supports."""
+        if (
+            self._attr_preset_mode == PRESET_MODE_MANUAL
+            or self.coordinator.data["manual_speed_selected"]
+        ):
+            return 100  # Manual speed supports 1-100
         return len(FAN_SPEEDS)
 
     def set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
+        LOGGER.debug("Setting percentage to %s", percentage)
         self._attr_percentage = percentage
         if percentage == 0:
             self.set_preset_mode(None)
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
+        LOGGER.debug(
+            "Async setting percentage to %s preset mode %s %s",
+            percentage,
+            self._attr_preset_mode,
+            self.coordinator.data["manual_speed_selected"],
+        )
         if percentage == 0:
             await self.coordinator.api.power_off()
-            await self.hass.async_add_executor_job(self.set_preset_mode, None)
+            if (
+                self._attr_preset_mode != PRESET_MODE_MANUAL
+                and self.coordinator.data["manual_speed_selected"]
+            ):
+                await self.hass.async_add_executor_job(self.set_preset_mode, None)
         else:
             await self.coordinator.api.power_on()
             if (
                 self.coordinator.data["manual_speed_selected"]
                 and self.coordinator.data["manual_speed"]
             ):
+                await self.coordinator.api.speed_manual(percentage)
+            elif self._attr_preset_mode == PRESET_MODE_MANUAL:
                 await self.coordinator.api.speed_manual(percentage)
             elif self.coordinator.data["speed_list"]:
                 await self.coordinator.api.speed(
@@ -118,7 +139,15 @@ class SikuFan(SikuEntity, FanEntity):
                 await self.coordinator.api.speed(
                     percentage_to_ordered_list_item(FAN_SPEEDS, percentage)
                 )
-            if self.oscillating:
+            # did any of the preset modes change?
+            if (
+                self.coordinator.data["manual_speed_selected"]
+                or self._attr_preset_mode == PRESET_MODE_MANUAL
+            ):
+                await self.hass.async_add_executor_job(
+                    self.set_preset_mode, PRESET_MODE_MANUAL
+                )
+            elif self.oscillating:
                 await self.hass.async_add_executor_job(
                     self.set_preset_mode, PRESET_MODE_AUTO
                 )
@@ -141,17 +170,18 @@ class SikuFan(SikuEntity, FanEntity):
         if oscillating:
             if not self.is_on:
                 await self.async_turn_on()
-            await self.coordinator.api.direction("alternating")
-            await self.hass.async_add_executor_job(
-                self.set_preset_mode, PRESET_MODE_AUTO
-            )
+            await self.coordinator.api.direction(DIRECTION_ALTERNATING)
+            preset_mode = PRESET_MODE_AUTO
         else:
-            await self.coordinator.api.direction("forward")
-            await self.hass.async_add_executor_job(self.set_preset_mode, PRESET_MODE_ON)
+            await self.coordinator.api.direction(DIRECTION_FORWARD)
+            preset_mode = PRESET_MODE_ON
+        if self.coordinator.data["manual_speed_selected"]:
+            preset_mode = PRESET_MODE_MANUAL
+        await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode)
         await self.hass.async_add_executor_job(self.oscillate, oscillating)
         self.async_write_ha_state()
 
-    def set_direction(self, direction: str) -> None:
+    def set_direction(self, direction: str | None) -> None:
         """Set the direction of the fan."""
         self._attr_current_direction = direction
 
@@ -161,7 +191,12 @@ class SikuFan(SikuEntity, FanEntity):
         await self.hass.async_add_executor_job(self.set_direction, direction)
         if self.oscillating:
             await self.hass.async_add_executor_job(self.oscillate, False)
-        await self.hass.async_add_executor_job(self.set_preset_mode, PRESET_MODE_ON)
+        if self.coordinator.data["manual_speed_selected"]:
+            await self.hass.async_add_executor_job(
+                self.set_preset_mode, PRESET_MODE_MANUAL
+            )
+        else:
+            await self.hass.async_add_executor_job(self.set_preset_mode, PRESET_MODE_ON)
         self.async_write_ha_state()
 
     async def async_turn_on(
@@ -171,9 +206,14 @@ class SikuFan(SikuEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
+        LOGGER.debug(
+            "Turning on fan with percentage %s and preset mode %s : %s",
+            percentage,
+            preset_mode,
+            kwargs,
+        )
         if percentage is None:
             percentage = ordered_list_item_to_percentage(FAN_SPEEDS, FAN_SPEEDS[0])
-
         await self.async_set_percentage(percentage)
         self.async_write_ha_state()
 
@@ -182,29 +222,48 @@ class SikuFan(SikuEntity, FanEntity):
         await self.async_set_percentage(0)
         self.async_write_ha_state()
 
-    def set_preset_mode(self, preset_mode: str) -> None:
+    def set_preset_mode(self, preset_mode: str | None) -> None:
         """Set the preset mode of the fan."""
         self._attr_preset_mode = preset_mode
         self.schedule_update_ha_state()
 
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
+    async def async_set_preset_mode(self, preset_mode: str | None) -> None:
         """Set new preset mode."""
         if preset_mode == PRESET_MODE_PARTY:
-            await self.async_turn_on()
+            LOGGER.debug("Setting preset mode to party from %s", self._attr_preset_mode)
+            await self.coordinator.api.power_on()
             response = await self.coordinator.api.party()
             if response:
                 self.coordinator.async_set_updated_data(response)
         elif preset_mode == PRESET_MODE_SLEEP:
-            await self.async_turn_on()
+            LOGGER.debug("Setting preset mode to sleep from %s", self._attr_preset_mode)
+            await self.coordinator.api.power_on()
             response = await self.coordinator.api.sleep()
             if response:
                 self.coordinator.async_set_updated_data(response)
         elif preset_mode == PRESET_MODE_AUTO:
-            await self.async_turn_on()
+            LOGGER.debug("Setting preset mode to auto from %s", self._attr_preset_mode)
+            await self.coordinator.api.power_on()
+            response = await self.coordinator.api.speed(FAN_SPEEDS[0])
+            if response:
+                self.coordinator.async_set_updated_data(response)
             await self.async_oscillate(True)
         elif preset_mode == PRESET_MODE_ON:
-            await self.async_turn_on()
-            await self.async_set_direction("forward")
+            LOGGER.debug("Setting preset mode to on from %s", self._attr_preset_mode)
+            await self.coordinator.api.power_on()
+            response = await self.coordinator.api.speed(FAN_SPEEDS[0])
+            if response:
+                self.coordinator.async_set_updated_data(response)
+            await self.async_set_direction(DIRECTIONS[DIRECTION_FORWARD])
+        elif preset_mode == PRESET_MODE_MANUAL:
+            LOGGER.debug(
+                "Setting preset mode to manual from %s", self._attr_preset_mode
+            )
+            await self.coordinator.api.power_on()
+            percentage = ordered_list_item_to_percentage(FAN_SPEEDS, FAN_SPEEDS[0])
+            response = await self.coordinator.api.speed_manual(percentage)
+            if response:
+                self.coordinator.async_set_updated_data(response)
         await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode)
         self.async_write_ha_state()
 
@@ -220,12 +279,10 @@ class SikuFan(SikuEntity, FanEntity):
         if self.coordinator.data is None:
             return
         if self.coordinator.data["is_on"]:
-            if (
-                self.coordinator.data["manual_speed_selected"]
-                and self.coordinator.data["manual_speed"]
-            ):
+            if self.coordinator.data["manual_speed_selected"]:
                 LOGGER.debug(
-                    "Setting manual speed from %s",
+                    "Setting manual speed from selection %s and speed %s",
+                    self.coordinator.data["manual_speed_selected"],
                     self.coordinator.data["manual_speed"],
                 )
                 self.set_percentage(
@@ -234,7 +291,7 @@ class SikuFan(SikuEntity, FanEntity):
                         self.coordinator.data["manual_speed"],
                     )
                 )
-                # self.set_percentage(self.coordinator.data["manual_speed"])
+                self.set_preset_mode(PRESET_MODE_MANUAL)
             elif self.coordinator.data["speed_list"]:
                 LOGGER.debug(
                     "Setting percentage from speed %s", self.coordinator.data["speed"]
@@ -253,20 +310,36 @@ class SikuFan(SikuEntity, FanEntity):
                         self.coordinator.data["speed"],
                     )
                 )
+                if not self.coordinator.data["oscillating"] and self.coordinator.data[
+                    "direction"
+                ] != int(DIRECTION_ALTERNATING):
+                    self.set_preset_mode(PRESET_MODE_ON)
+                else:
+                    self.set_preset_mode(PRESET_MODE_AUTO)
             else:
                 self.set_percentage(
                     ordered_list_item_to_percentage(
                         FAN_SPEEDS, self.coordinator.data["speed"]
                     )
                 )
+                if not self.coordinator.data["oscillating"] and self.coordinator.data[
+                    "direction"
+                ] != int(DIRECTION_ALTERNATING):
+                    self.set_preset_mode(PRESET_MODE_ON)
+                else:
+                    self.set_preset_mode(PRESET_MODE_AUTO)
         else:
             self.set_percentage(0)
-        if (
-            not self.coordinator.data["oscillating"]
-            and self.coordinator.data["direction"] != "alternating"
-        ):
+        if not self.coordinator.data["oscillating"] and self.coordinator.data[
+            "direction"
+        ] != int(DIRECTION_ALTERNATING):
             self.oscillate(False)
-            self.set_direction(self.coordinator.data["direction"])
+            if isinstance(self.coordinator.data["direction"], int):
+                direction = f"{self.coordinator.data['direction']:02}"
+            else:
+                direction = self.coordinator.data["direction"]
+            mapped_direction = DIRECTIONS.get(direction, DIRECTIONS[DIRECTION_FORWARD])
+            self.set_direction(mapped_direction)
         else:
             self.oscillate(True)
 

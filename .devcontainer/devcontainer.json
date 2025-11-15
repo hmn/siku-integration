@@ -2,12 +2,16 @@
 {
   "name": "Siku Fan integration development",
   "image": "mcr.microsoft.com/vscode/devcontainers/python:3.13-bookworm",
-  "postCreateCommand": "scripts/setup",
+  "postCreateCommand": "bash scripts/setup",
   "waitFor": "postCreateCommand",
-  "forwardPorts": [8123],
+  "forwardPorts": [8123, 4000],
   "portsAttributes": {
     "8123": {
       "label": "Home Assistant",
+      "onAutoForward": "notify"
+    },
+    "4000": {
+      "label": "Fake Siku Fan",
       "onAutoForward": "notify"
     }
   },
@@ -21,9 +25,13 @@
         "ryanluker.vscode-coverage-gutters",
         "charliermarsh.ruff",
         "GitHub.copilot",
-        "GitHub.copilot-chat"
+        "github.copilot-chat"
       ],
       "settings": {
+      "terminal.integrated.profiles.linux": {
+        "zsh": {
+          "path": "/usr/bin/zsh"
+        },
         "files.eol": "\n",
         "editor.tabSize": 4,
         "python.pythonPath": "/usr/local/bin/python3",

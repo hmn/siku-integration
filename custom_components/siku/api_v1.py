@@ -1,9 +1,12 @@
 """Helper api function for sending commands to the fan controller."""
 
 from enum import IntEnum
+import time
 import logging
-import socket
+import asyncio
 from types import NoneType
+from typing import Literal
+from .udp import AsyncUdpClient
 from homeassistant.util.percentage import percentage_to_ranged_value
 
 from .const import DIRECTIONS
@@ -21,8 +24,10 @@ class SpeedSelection(IntEnum):
     LOW = 1
     MEDIUM = 2
     HIGH = 3
+    MANUAL = 4
 
 
+SPEED_MANUAL_LOW: int = 0
 SPEED_MANUAL_MIN: int = 22
 SPEED_MANUAL_MAX: int = 255
 
@@ -39,6 +44,12 @@ class SpeedManual:
     def __int__(self):
         """Return the value."""
         return self.value
+
+    def to_bytes(
+        self, length: int, byteorder: Literal["big", "little"] = "big"
+    ) -> bytes:
+        """Convert to bytes."""
+        return self.value.to_bytes(length, byteorder=byteorder)
 
 
 class Direction(IntEnum):
@@ -335,6 +346,8 @@ class SikuV1Api:
         """Initialize."""
         self.host = host
         self.port = port
+        self._udp = AsyncUdpClient(self.host, self.port)
+        self._lock = asyncio.Lock()
 
     async def status(self) -> dict:
         """Get status from fan controller."""
@@ -369,34 +382,43 @@ class SikuV1Api:
 
     async def speed(self, speed: str | int) -> dict:
         """Set fan speed."""
-        speed = SpeedSelection(int(speed))
-        data = await self._control_packet([("speed", speed)])
+        _speed: SpeedSelection = SpeedSelection(int(speed))
+        data = await self._control_packet([("speed", _speed)])
         hexlist = await self._send_command(data)
         result = await self._translate_response(hexlist)
-        LOGGER.info("Set speed to %s : %s", speed, result["speed"])
         return await self._format_response(result)
 
     async def speed_manual(self, percentage: int) -> dict:
-        """Set fan speed."""
-        low_high_range = (float(SPEED_MANUAL_MIN), float(SPEED_MANUAL_MAX))
-        speed: int = int(
-            percentage_to_ranged_value(
-                low_high_range=low_high_range, percentage=float(percentage)
+        """Set manual fan speed."""
+        if percentage < 9:
+            percentage = 9
+        if percentage > 100:
+            percentage = 100
+        low_high_range = (float(SPEED_MANUAL_LOW), float(SPEED_MANUAL_MAX))
+        _speed: SpeedManual = SpeedManual(
+            int(
+                percentage_to_ranged_value(
+                    low_high_range=low_high_range, percentage=float(percentage)
+                )
             )
         )
-        data = await self._control_packet([("manual_speed", speed)])
+        data = await self._control_packet(
+            [
+                ("speed", SpeedSelection.MANUAL),
+                ("manual_speed", _speed),
+            ]
+        )
         hexlist = await self._send_command(data)
         result = await self._translate_response(hexlist)
-        LOGGER.info("Set manual speed to %s : %s", speed, result["manual_speed"])
         return await self._format_response(result)
 
-    async def direction(self, direction: str) -> dict:
+    async def direction(self, direction: str | int) -> dict:
         """Set fan direction."""
         # if direction is in DIRECTIONS values translate it to the key value
-        # TODO: needs cleanup
+        # NOTE: cleanup desired
         if direction in DIRECTIONS.values():
             direction = list(DIRECTIONS.keys())[
-                list(DIRECTIONS.values()).index(direction)
+                list(DIRECTIONS.values()).index(str(direction))
             ]
         if direction not in DIRECTIONS:
             raise ValueError(f"Invalid fan direction: {direction}")
@@ -459,7 +481,7 @@ class SikuV1Api:
                 raise ValueError(f"Invalid command: {command}")
             if not isinstance(value, CONTROL[command]["value"]):
                 raise TypeError(
-                    f"Invalid value for command {command}: {type(value)} must be of type {CONTROL[command]['value']}"
+                    f"Invalid value {value} for command {command}: got {type(value)} but must be of type {CONTROL[command]['value']}"
                 )
 
             # packet_command = bytes.fromhex(command)
@@ -480,34 +502,51 @@ class SikuV1Api:
         return packet_commands
 
     async def _send_command(self, data: bytes) -> list[str]:
-        """Send command to fan controller."""
+        """Send command to fan controller using asyncio UDP transport."""
         packet_data = COMMAND_PACKET_PREFIX + data + COMMAND_PACKET_POSTFIX
+        packet_hex = packet_data.hex().upper()
 
-        for attempt in range(3):  # Retry up to 3 times
+        for attempt in range(3):
+            start_time = time.time()
             try:
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
-                    s.settimeout(1)
-                    server_address = (self.host, self.port)
-                    LOGGER.debug('sending "%s" to %s', packet_data, server_address)
-                    s.sendto(packet_data, server_address)
-
-                    # Receive response
-                    data, server = s.recvfrom(4096)
-                    LOGGER.debug('received "%s" from %s', data, server)
-
-                    # Match feedback packet prefix and cut from the data
-                    if data.startswith(FEEDBACK_PACKET_PREFIX):
-                        data = data[len(FEEDBACK_PACKET_PREFIX) :]
-
-                    hexstring = data.hex()
-                    hexlist = ["".join(x) for x in zip(*[iter(hexstring)] * 2)]
-                    LOGGER.debug("returning hexlist %s", hexlist)
-                    return hexlist
-            except TimeoutError as ex:
-                LOGGER.warning("Timeout occurred, retrying... (%d/3)", attempt + 1)
+                LOGGER.debug(
+                    "[%s:%d] Sending request (attempt %d/3)",
+                    self.host,
+                    self.port,
+                    attempt + 1,
+                )
+                async with self._lock:
+                    data_bytes = await self._udp.request(packet_data)
+                elapsed = time.time() - start_time
+                LOGGER.debug(
+                    "[%s:%d] Request completed in %.3f seconds",
+                    self.host,
+                    self.port,
+                    elapsed,
+                )
+                # Match feedback packet prefix and cut from the data
+                if data_bytes.startswith(FEEDBACK_PACKET_PREFIX):
+                    data_bytes = data_bytes[len(FEEDBACK_PACKET_PREFIX) :]
+                hexstring = data_bytes.hex()
+                hexlist = ["".join(x) for x in zip(*[iter(hexstring)] * 2)]
+                LOGGER.debug("returning hexlist %s", hexlist)
+                return hexlist
+            except (asyncio.TimeoutError, TimeoutError) as ex:
+                elapsed = time.time() - start_time
+                LOGGER.warning(
+                    "[%s:%d] Request timed out after %.3f seconds (attempt %d/3). "
+                    "Packet: %s, Error: %s",
+                    self.host,
+                    self.port,
+                    elapsed,
+                    attempt + 1,
+                    packet_hex[:40] + "..." if len(packet_hex) > 40 else packet_hex,
+                    type(ex).__name__,
+                )
                 if attempt == 2:
                     raise TimeoutError(
-                        "Failed to send command after 3 attempts"
+                        f"Failed to send command to {self.host}:{self.port} "
+                        f"after 3 attempts (total time: {elapsed:.3f}s)"
                     ) from ex
         raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
@@ -556,10 +595,15 @@ class SikuV1Api:
         return {
             "is_on": bool(data["status"] == OffOn.ON),
             "speed": int(data["speed"]),
-            "speed_list": list(map(int, SpeedSelection)),
+            "speed_list": [
+                int(s) for s in SpeedSelection if s != SpeedSelection.MANUAL
+            ],
             "manual_speed_selected": bool(data["speed"] == SpeedSelected.MANUAL),
             "manual_speed": int(data["manual_speed"]),
-            "manual_speed_low_high_range": (SPEED_MANUAL_MIN, SPEED_MANUAL_MAX),
+            "manual_speed_low_high_range": (
+                float(SPEED_MANUAL_LOW),
+                float(SPEED_MANUAL_MAX),
+            ),
             "oscillating": bool(data["direction"] == Direction.HEAT_RECOVERY),
             "direction": (
                 data["direction"]

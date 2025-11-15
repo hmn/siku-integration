@@ -1,8 +1,10 @@
 """Helper api function for sending commands to the fan controller."""
 
+import time
 import logging
-import socket
+import asyncio
 from homeassistant.util.percentage import percentage_to_ranged_value
+from .udp import AsyncUdpClient
 
 from .const import DIRECTION_ALTERNATING
 from .const import DIRECTIONS
@@ -95,6 +97,8 @@ class SikuV2Api:
         self.port = port
         self.idnum = idnum
         self.password = password
+        self._udp = AsyncUdpClient(self.host, self.port)
+        self._lock = asyncio.Lock()
 
     async def status(self) -> dict:
         """Get status from fan controller."""
@@ -142,11 +146,13 @@ class SikuV2Api:
         """Set manual fan speed."""
         low_high_range = (float(SPEED_MANUAL_MIN), float(SPEED_MANUAL_MAX))
         speed: int = int(
-            percentage_to_ranged_value(
-                low_high_range=low_high_range, percentage=float(percentage)
+            round(
+                percentage_to_ranged_value(
+                    low_high_range=low_high_range, percentage=float(percentage)
+                )
             )
         )
-        cmd = f"{COMMAND_MANUAL_SPEED}{speed}".upper()
+        cmd = f"{COMMAND_SPEED}FF{COMMAND_MANUAL_SPEED}{speed:02X}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
@@ -226,51 +232,79 @@ class SikuV2Api:
         return packet_str
 
     async def _send_command(self, func: str, data: str) -> list[str]:
-        """Send command to fan controller."""
-        # enter the data content of the UDP packet as hex
+        """Send command to fan controller using asyncio UDP transport."""
         packet_str = self._build_packet(func, data)
         packet_data = bytes.fromhex(packet_str)
 
-        for attempt in range(3):  # Retry up to 3 times
+        # Map function codes to readable names for logging
+        func_names = {
+            FUNC_READ: "READ",
+            FUNC_WRITE: "WRITE",
+            FUNC_READ_WRITE: "READ_WRITE",
+            FUNC_INC: "INCREMENT",
+            FUNC_DEC: "DECREMENT",
+        }
+        func_name = func_names.get(func, f"UNKNOWN({func})")
+
+        for attempt in range(3):
+            start_time = time.time()
             try:
-                # initialize a socket, think of it as a cable
-                # SOCK_DGRAM specifies that this is UDP
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0) as s:
-                    s.settimeout(1)
-                    server_address = (self.host, self.port)
+                if func == FUNC_WRITE:
+                    LOGGER.debug("write command, no response expected")
+                    async with self._lock:
+                        await self._udp.send_only(packet_data)
+                    elapsed = time.time() - start_time
                     LOGGER.debug(
-                        'sending "%s" size(%s) to %s',
-                        packet_data.hex(),
-                        len(packet_data),
-                        server_address,
+                        "[%s:%d] WRITE command completed in %.3f seconds",
+                        self.host,
+                        self.port,
+                        elapsed,
                     )
-                    s.sendto(packet_data, server_address)
+                    return []
 
-                    if func == FUNC_WRITE:
-                        LOGGER.debug("write command, no response expected")
-                        s.close()
-                        return []
+                LOGGER.debug(
+                    "[%s:%d] Sending %s request (attempt %d/3)",
+                    self.host,
+                    self.port,
+                    func_name,
+                    attempt + 1,
+                )
+                async with self._lock:
+                    result_data = await self._udp.request(packet_data)
+                elapsed = time.time() - start_time
+                LOGGER.debug(
+                    "[%s:%d] %s request completed in %.3f seconds",
+                    self.host,
+                    self.port,
+                    func_name,
+                    elapsed,
+                )
+                result_str = result_data.hex().upper()
+                LOGGER.debug("receive string: %s", result_str)
 
-                    # Receive response
-                    result_data, server = s.recvfrom(4096)
-                    LOGGER.debug(
-                        'received "%s" size(%s) from %s',
-                        result_data,
-                        len(result_data),
-                        server,
-                    )
-                    result_str = result_data.hex().upper()
-                    LOGGER.debug("receive string: %s", result_str)
-
-                    result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
-                    if not self._verify_checksum(result_hexlist):
-                        raise ValueError("Checksum error")
-                    LOGGER.debug("returning hexlist %s", result_hexlist)
-                    return result_hexlist
-            except TimeoutError:
-                LOGGER.warning("Timeout occurred, retrying... (%d/3)", attempt + 1)
+                result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
+                if not self._verify_checksum(result_hexlist):
+                    raise ValueError("Checksum error")
+                LOGGER.debug("returning hexlist %s", result_hexlist)
+                return result_hexlist
+            except (asyncio.TimeoutError, TimeoutError) as ex:
+                elapsed = time.time() - start_time
+                LOGGER.warning(
+                    "[%s:%d] %s request timed out after %.3f seconds (attempt %d/3). "
+                    "Packet: %s, Error: %s",
+                    self.host,
+                    self.port,
+                    func_name,
+                    elapsed,
+                    attempt + 1,
+                    packet_str[:40] + "..." if len(packet_str) > 40 else packet_str,
+                    type(ex).__name__,
+                )
                 if attempt == 2:
-                    raise TimeoutError("Failed to send command after 3 attempts")
+                    raise TimeoutError(
+                        f"Failed to send {func_name} command to {self.host}:{self.port} "
+                        f"after 3 attempts (total time: {elapsed:.3f}s)"
+                    ) from ex
         raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
     async def _translate_response(self, data: dict) -> dict:
@@ -283,7 +317,7 @@ class SikuV2Api:
         try:
             speed = f"{int(data[COMMAND_SPEED], 16):02}"
         except KeyError:
-            speed = "FF"
+            speed = "255"
         try:
             manual_speed = f"{int(data[COMMAND_MANUAL_SPEED], 16):02}"
         except KeyError:
@@ -347,9 +381,12 @@ class SikuV2Api:
             "is_on": is_on,
             "speed": speed,
             "speed_list": FAN_SPEEDS,
-            "manual_speed_selected": bool(speed == "FF"),
-            "manual_speed": int(manual_speed, 16),
-            "manual_speed_low_high_range": (SPEED_MANUAL_MIN, SPEED_MANUAL_MAX),
+            "manual_speed_selected": bool(speed == "255"),
+            "manual_speed": int(manual_speed),
+            "manual_speed_low_high_range": (
+                float(SPEED_MANUAL_MIN),
+                float(SPEED_MANUAL_MAX),
+            ),
             "oscillating": oscillating,
             "direction": direction,
             "boost": boost,

@@ -49,8 +49,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]):
         )
     else:
         raise ValueError("Invalid API version")
-    if not await api.status():
-        raise CannotConnect
+
+    try:
+        if not await api.status():
+            raise CannotConnect
+    except (ConnectionRefusedError, OSError) as err:
+        raise CannotConnect from err
 
 
 class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
