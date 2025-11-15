@@ -279,10 +279,7 @@ class SikuFan(SikuEntity, FanEntity):
         if self.coordinator.data is None:
             return
         if self.coordinator.data["is_on"]:
-            if (
-                self.coordinator.data["manual_speed_selected"]
-                and self.coordinator.data["manual_speed"]
-            ):
+            if self.coordinator.data["manual_speed_selected"]:
                 LOGGER.debug(
                     "Setting manual speed from selection %s and speed %s",
                     self.coordinator.data["manual_speed_selected"],
