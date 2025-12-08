@@ -94,9 +94,11 @@ async def test_update_method_success(mock_v1api, mock_hass, config_entry_v1):
 @patch("custom_components.siku.coordinator.SikuV1Api")
 async def test_update_method_failure(mock_v1api, mock_hass, config_entry_v1):
     mock_api = MagicMock()
+    mock_api.host = "192.168.1.100"
+    mock_api.port = 4000
     mock_api.status = AsyncMock(side_effect=TimeoutError("timeout"))
     mock_v1api.return_value = mock_api
     coordinator = SikuDataUpdateCoordinator(mock_hass, config_entry_v1)
     with pytest.raises(UpdateFailed) as exc:
         await coordinator._update_method()
-    assert "Connection to Siku Fan failed" in str(exc.value)
+    assert "Timeout connecting to Siku Fan" in str(exc.value)

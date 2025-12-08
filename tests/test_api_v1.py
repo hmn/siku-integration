@@ -1,7 +1,8 @@
 """Tests for SikuV1Api."""
 
+import asyncio
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from custom_components.siku.api_v1 import (
     FEEDBACK_PACKET_PREFIX,
     OperationMode,
@@ -59,10 +60,7 @@ async def test_send_command_success(api):
         FEEDBACK_PACKET_PREFIX
         + b"\x03\x01\x04\x01\x05\x16\x06\x00\x08\x40\x09\x00\x11\x50\x0c\x00\x0d\x00\x0e\x00\x0f\x00\x10\x00\x11\x50\x12\x00\x13\x00\x14\x00\x00\x00\x15\x00\x00\x00\x16\x00\x00\x00\x17\x00\x00\x00\x18\x00\x19\x00\x1a\x00\x1b\x00\x1c\x00\x1d\x00\x1e\x00\x1f\x00\x20\x01\x21\x01\x22\x01\x23\x01\x25\x05\x26\x00\x27\x00"
     )
-    with patch("socket.socket") as mock_socket:
-        mock_sock = MagicMock()
-        mock_socket.return_value.__enter__.return_value = mock_sock
-        mock_sock.recvfrom.return_value = (fake_response, ("127.0.0.1", 12345))
+    with patch.object(api._udp, "request", new=AsyncMock(return_value=fake_response)):
         result = await api._send_command(b"\x01\x00")
         assert isinstance(result, list)
         for item in result:
@@ -72,12 +70,13 @@ async def test_send_command_success(api):
 
 @pytest.mark.asyncio
 async def test_send_command_timeout(api):
-    with patch("socket.socket") as mock_socket:
-        mock_sock = MagicMock()
-        mock_socket.return_value.__enter__.return_value = mock_sock
-        mock_sock.recvfrom.side_effect = TimeoutError
-        with pytest.raises(TimeoutError):
-            await api._send_command(b"\x01\x00")
+    with (
+        patch.object(
+            api._udp, "request", new=AsyncMock(side_effect=asyncio.TimeoutError)
+        ),
+        pytest.raises(TimeoutError),
+    ):
+        await api._send_command(b"\x01\x00")
 
 
 @pytest.mark.asyncio
