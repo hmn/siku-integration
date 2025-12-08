@@ -99,7 +99,7 @@ class FakeFanController:
         LOGGER.info(f"  Device ID: {self.device_id}")
         LOGGER.info(f"  Password: {self.password}")
         if self.slow_mode:
-            LOGGER.info("  Slow mode: ENABLED (2-5 second delays)")
+            LOGGER.info("  Slow mode: ENABLED (1-7 second delays)")
 
     def _checksum(self, data: str) -> str:
         """Calculate checksum for packet."""
@@ -462,7 +462,7 @@ Examples:
     parser.add_argument(
         "--slow",
         action="store_true",
-        help="Enable slow mode (random 1-10 second delays in responses)",
+        help="Enable slow mode (random 1-7 second delays in responses)",
     )
 
     args = parser.parse_args()

@@ -31,7 +31,8 @@
       "terminal.integrated.profiles.linux": {
         "zsh": {
           "path": "/usr/bin/zsh"
-        },
+        }
+      },
         "files.eol": "\n",
         "editor.tabSize": 4,
         "python.pythonPath": "/usr/local/bin/python3",
