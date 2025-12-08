@@ -140,8 +140,8 @@ async def test_status_manual(api):
         assert result["manual_speed"] <= SPEED_MANUAL_MAX
         assert result["manual_speed"] == int(SPEED_MANUAL_MAX / 100 * 49)
         assert result["manual_speed_low_high_range"] == (
-            SPEED_MANUAL_MIN,
-            SPEED_MANUAL_MAX,
+            float(SPEED_MANUAL_MIN),
+            float(SPEED_MANUAL_MAX),
         )
         assert result["oscillating"] is False
         assert result["direction"] == "alternating"
