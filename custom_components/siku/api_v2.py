@@ -3,6 +3,7 @@
 import time
 import logging
 import asyncio
+import random
 from homeassistant.util.percentage import percentage_to_ranged_value
 from .udp import AsyncUdpClient
 
@@ -14,6 +15,9 @@ from .const import PRESET_MODE_PARTY
 from .const import PRESET_MODE_SLEEP
 
 LOGGER = logging.getLogger(__name__)
+
+RETRY_DELAYS = (0.2, 0.5, 1.0)
+REQUEST_TIMEOUT = 8.0
 
 # forward = pull air out of the room
 # reverse = pull air into the room from outside
@@ -99,6 +103,18 @@ class SikuV2Api:
         self.password = password
         self._udp = AsyncUdpClient(self.host, self.port)
         self._lock = asyncio.Lock()
+        self._req_counter = 0
+
+    def _new_request_id(self) -> str:
+        """Return a request id for log correlation.
+
+        Note: This method is not protected by self._lock since it's called
+        before entering the lock context. The counter increment is not
+        atomic, but collisions are unlikely and request IDs are for
+        debugging only, not for correctness.
+        """
+        self._req_counter = (self._req_counter + 1) % 1_000_000
+        return f"v2-{int(time.time() * 1000)}-{self._req_counter:06d}-{random.randint(0, 9999):04d}"
 
     async def status(self) -> dict:
         """Get status from fan controller."""
@@ -246,66 +262,124 @@ class SikuV2Api:
         }
         func_name = func_names.get(func, f"UNKNOWN({func})")
 
-        for attempt in range(3):
-            start_time = time.time()
+        request_id = self._new_request_id()
+        total_attempts = len(RETRY_DELAYS)
+        overall_start_time = time.time()
+
+        for attempt_index, delay in enumerate(RETRY_DELAYS):
+            attempt_start_time = time.time()
             try:
                 if func == FUNC_WRITE:
-                    LOGGER.debug("write command, no response expected")
-                    async with self._lock:
-                        await self._udp.send_only(packet_data)
-                    elapsed = time.time() - start_time
                     LOGGER.debug(
-                        "[%s:%d] WRITE command completed in %.3f seconds",
+                        "[%s:%d req=%s] write command, no response expected",
                         self.host,
                         self.port,
+                        request_id,
+                    )
+                    async with self._lock:
+                        await self._udp.send_only(packet_data, request_id=request_id)
+                    elapsed = time.time() - attempt_start_time
+                    LOGGER.debug(
+                        "[%s:%d req=%s] WRITE command completed in %.3f seconds",
+                        self.host,
+                        self.port,
+                        request_id,
                         elapsed,
                     )
                     return []
 
                 LOGGER.debug(
-                    "[%s:%d] Sending %s request (attempt %d/3)",
+                    "[%s:%d req=%s] Sending %s request (attempt %d/%d)",
                     self.host,
                     self.port,
+                    request_id,
                     func_name,
-                    attempt + 1,
+                    attempt_index + 1,
+                    total_attempts,
                 )
                 async with self._lock:
-                    result_data = await self._udp.request(packet_data)
-                elapsed = time.time() - start_time
+                    result_data = await self._udp.request(
+                        packet_data, timeout=REQUEST_TIMEOUT, request_id=request_id
+                    )
+                elapsed = time.time() - attempt_start_time
                 LOGGER.debug(
-                    "[%s:%d] %s request completed in %.3f seconds",
+                    "[%s:%d req=%s] %s request completed in %.3f seconds",
                     self.host,
                     self.port,
+                    request_id,
                     func_name,
                     elapsed,
                 )
                 result_str = result_data.hex().upper()
-                LOGGER.debug("receive string: %s", result_str)
+                LOGGER.debug(
+                    "[%s:%d req=%s] receive string: %s",
+                    self.host,
+                    self.port,
+                    request_id,
+                    result_str,
+                )
 
                 result_hexlist = ["".join(x) for x in zip(*[iter(result_str)] * 2)]
                 if not self._verify_checksum(result_hexlist):
                     raise ValueError("Checksum error")
-                LOGGER.debug("returning hexlist %s", result_hexlist)
+                LOGGER.debug(
+                    "[%s:%d req=%s] returning hexlist %s",
+                    self.host,
+                    self.port,
+                    request_id,
+                    result_hexlist,
+                )
                 return result_hexlist
             except (asyncio.TimeoutError, TimeoutError) as ex:
-                elapsed = time.time() - start_time
+                elapsed = time.time() - attempt_start_time
+                total_elapsed = time.time() - overall_start_time
                 LOGGER.warning(
-                    "[%s:%d] %s request timed out after %.3f seconds (attempt %d/3). "
+                    "[%s:%d req=%s] %s request timed out after %.3f seconds (attempt %d/%d). "
                     "Packet: %s, Error: %s",
                     self.host,
                     self.port,
+                    request_id,
                     func_name,
                     elapsed,
-                    attempt + 1,
-                    packet_str[:40] + "..." if len(packet_str) > 40 else packet_str,
+                    attempt_index + 1,
+                    total_attempts,
+                    packet_str,
                     type(ex).__name__,
                 )
-                if attempt == 2:
+                if attempt_index == total_attempts - 1:
                     raise TimeoutError(
                         f"Failed to send {func_name} command to {self.host}:{self.port} "
-                        f"after 3 attempts (total time: {elapsed:.3f}s)"
+                        f"after {total_attempts} attempts (total time: {total_elapsed:.3f}s, req={request_id})"
                     ) from ex
-        raise LookupError(f"Failed to send command to {self.host}:{self.port}")
+                sleep_for = delay + random.uniform(0, 0.15)
+                await asyncio.sleep(sleep_for)
+            except OSError as ex:
+                # Treat network/socket errors as transient and retry, since the
+                # underlying UDP client may have closed its socket on exception.
+                elapsed = time.time() - attempt_start_time
+                total_elapsed = time.time() - overall_start_time
+                LOGGER.warning(
+                    "[%s:%d req=%s] %s request failed with network error after %.3f seconds "
+                    "(attempt %d/%d). Packet: %s, Error: %s",
+                    self.host,
+                    self.port,
+                    request_id,
+                    func_name,
+                    elapsed,
+                    attempt_index + 1,
+                    total_attempts,
+                    packet_str,
+                    f"{type(ex).__name__}: {ex}",
+                )
+                if attempt_index == total_attempts - 1:
+                    # On the final attempt, propagate the original network error.
+                    raise
+                # Close and re-create the UDP client in case the previous error closed the socket.
+                async with self._lock:
+                    await self._udp.close()
+                    self._udp = AsyncUdpClient(self.host, self.port)
+                sleep_for = delay + random.uniform(0, 0.15)
+                await asyncio.sleep(sleep_for)
 
     async def _translate_response(self, data: dict) -> dict:
         """Translate response data to dict."""
