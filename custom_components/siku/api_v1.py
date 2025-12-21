@@ -565,7 +565,7 @@ class SikuV1Api:
                     elapsed,
                     attempt_index + 1,
                     total_attempts,
-                    packet_hex[:40] + "..." if len(packet_hex) > 40 else packet_hex,
+                    packet_hex,
                     type(ex).__name__,
                 )
                 if attempt_index == total_attempts - 1:
@@ -587,7 +587,7 @@ class SikuV1Api:
                     elapsed,
                     attempt_index + 1,
                     total_attempts,
-                    packet_hex[:40] + "..." if len(packet_hex) > 40 else packet_hex,
+                    packet_hex,
                     type(ex).__name__,
                     str(ex),
                 )
