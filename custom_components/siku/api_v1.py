@@ -4,6 +4,7 @@ from enum import IntEnum
 import time
 import logging
 import asyncio
+import random
 from types import NoneType
 from typing import Literal
 from .udp import AsyncUdpClient
@@ -12,6 +13,9 @@ from homeassistant.util.percentage import percentage_to_ranged_value
 from .const import DIRECTIONS
 
 LOGGER = logging.getLogger(__name__)
+
+RETRY_DELAYS = (0.2, 0.5, 1.0)
+REQUEST_TIMEOUT = 8.0
 
 COMMAND_PACKET_PREFIX = bytes.fromhex("6D6F62696C65")
 COMMAND_PACKET_POSTFIX = bytes.fromhex("0D0A")
@@ -348,6 +352,12 @@ class SikuV1Api:
         self.port = port
         self._udp = AsyncUdpClient(self.host, self.port)
         self._lock = asyncio.Lock()
+        self._req_counter = 0
+
+    def _new_request_id(self) -> str:
+        """Return a request id for log correlation."""
+        self._req_counter = (self._req_counter + 1) % 1_000_000
+        return f"v1-{int(time.time() * 1000)}-{self._req_counter:06d}-{random.randint(0, 9999):04d}"
 
     async def status(self) -> dict:
         """Get status from fan controller."""
@@ -506,22 +516,29 @@ class SikuV1Api:
         packet_data = COMMAND_PACKET_PREFIX + data + COMMAND_PACKET_POSTFIX
         packet_hex = packet_data.hex().upper()
 
-        for attempt in range(3):
+        request_id = self._new_request_id()
+        total_attempts = len(RETRY_DELAYS)
+        for attempt_index, delay in enumerate(RETRY_DELAYS):
             start_time = time.time()
             try:
                 LOGGER.debug(
-                    "[%s:%d] Sending request (attempt %d/3)",
+                    "[%s:%d req=%s] Sending request (attempt %d/%d)",
                     self.host,
                     self.port,
-                    attempt + 1,
+                    request_id,
+                    attempt_index + 1,
+                    total_attempts,
                 )
                 async with self._lock:
-                    data_bytes = await self._udp.request(packet_data)
+                    data_bytes = await self._udp.request(
+                        packet_data, timeout=REQUEST_TIMEOUT, request_id=request_id
+                    )
                 elapsed = time.time() - start_time
                 LOGGER.debug(
-                    "[%s:%d] Request completed in %.3f seconds",
+                    "[%s:%d req=%s] Request completed in %.3f seconds",
                     self.host,
                     self.port,
+                    request_id,
                     elapsed,
                 )
                 # Match feedback packet prefix and cut from the data
@@ -529,25 +546,35 @@ class SikuV1Api:
                     data_bytes = data_bytes[len(FEEDBACK_PACKET_PREFIX) :]
                 hexstring = data_bytes.hex()
                 hexlist = ["".join(x) for x in zip(*[iter(hexstring)] * 2)]
-                LOGGER.debug("returning hexlist %s", hexlist)
+                LOGGER.debug(
+                    "[%s:%d req=%s] returning hexlist %s",
+                    self.host,
+                    self.port,
+                    request_id,
+                    hexlist,
+                )
                 return hexlist
             except (asyncio.TimeoutError, TimeoutError) as ex:
                 elapsed = time.time() - start_time
                 LOGGER.warning(
-                    "[%s:%d] Request timed out after %.3f seconds (attempt %d/3). "
+                    "[%s:%d req=%s] Request timed out after %.3f seconds (attempt %d/%d). "
                     "Packet: %s, Error: %s",
                     self.host,
                     self.port,
+                    request_id,
                     elapsed,
-                    attempt + 1,
+                    attempt_index + 1,
+                    total_attempts,
                     packet_hex[:40] + "..." if len(packet_hex) > 40 else packet_hex,
                     type(ex).__name__,
                 )
-                if attempt == 2:
+                if attempt_index == total_attempts - 1:
                     raise TimeoutError(
                         f"Failed to send command to {self.host}:{self.port} "
-                        f"after 3 attempts (total time: {elapsed:.3f}s)"
+                        f"after {total_attempts} attempts (last attempt duration: {elapsed:.3f}s, req={request_id})"
                     ) from ex
+                sleep_for = delay + random.uniform(0, 0.15)
+                await asyncio.sleep(sleep_for)
         raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
     async def _translate_response(self, hexlist: list[str]) -> dict:

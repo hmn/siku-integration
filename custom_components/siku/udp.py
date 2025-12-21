@@ -58,6 +58,12 @@ class AsyncUdpClient:
         self._transport: asyncio.DatagramTransport | None = None
         self._protocol: _UdpProtocol | None = None
         self._lock = asyncio.Lock()
+        self._req_counter = 0
+
+    def _next_request_id(self) -> str:
+        """Generate a simple, monotonic request id for log correlation."""
+        self._req_counter = (self._req_counter + 1) % 1_000_000
+        return f"{int(time.time() * 1000)}-{self._req_counter:06d}"
 
     async def ensure_transport(self) -> None:
         """Ensure the asyncio datagram transport is created."""
@@ -78,18 +84,24 @@ class AsyncUdpClient:
         self._transport = None
         self._protocol = None
 
-    async def request(self, payload: bytes, timeout: float = 5.0) -> bytes:
-        """Send a payload and await the response with a timeout."""
+    async def request(
+        self, payload: bytes, timeout: float = 5.0, request_id: str | None = None
+    ) -> bytes:
+        """Send a payload and await the response with a timeout, logging by request id."""
         await self.ensure_transport()
         assert self._protocol is not None
         async with self._lock:
+            rid = request_id or self._next_request_id()
+            preview = payload[:8].hex().upper()
             start_time = time.time()
             try:
                 LOGGER.debug(
-                    "[UDP %s:%d] Sending %d bytes, waiting for response (timeout=%.1fs)",
+                    "[UDP %s:%d req=%s] Sending %d bytes (hex head=%s), waiting for response (timeout=%.1fs)",
                     self._host,
                     self._port,
+                    rid,
                     len(payload),
+                    preview,
                     timeout,
                 )
                 data, _ = await self._protocol.request(
@@ -97,9 +109,10 @@ class AsyncUdpClient:
                 )
                 elapsed = time.time() - start_time
                 LOGGER.debug(
-                    "[UDP %s:%d] Received %d bytes in %.3f seconds",
+                    "[UDP %s:%d req=%s] Received %d bytes in %.3f seconds",
                     self._host,
                     self._port,
+                    rid,
                     len(data),
                     elapsed,
                 )
@@ -107,17 +120,33 @@ class AsyncUdpClient:
             except asyncio.TimeoutError:
                 elapsed = time.time() - start_time
                 LOGGER.warning(
-                    "[UDP %s:%d] No response received after %.3f seconds (timeout=%.1fs)",
+                    "[UDP %s:%d req=%s] No response received after %.3f seconds (timeout=%.1fs)",
                     self._host,
                     self._port,
+                    rid,
                     elapsed,
                     timeout,
                 )
+                await self.close()
+                raise
+            except Exception:
+                # Close and reopen transport on any socket-level error to avoid stuck sockets.
+                await self.close()
                 raise
 
-    async def send_only(self, payload: bytes) -> None:
-        """Send a payload without waiting for a response."""
+    async def send_only(self, payload: bytes, request_id: str | None = None) -> None:
+        """Send a payload without waiting for a response, logging by request id."""
         await self.ensure_transport()
         assert self._protocol is not None
         async with self._lock:
+            rid = request_id or self._next_request_id()
+            preview = payload[:8].hex().upper()
+            LOGGER.debug(
+                "[UDP %s:%d req=%s] send_only %d bytes (hex head=%s)",
+                self._host,
+                self._port,
+                rid,
+                len(payload),
+                preview,
+            )
             self._protocol.send_only(payload, (self._host, self._port))
