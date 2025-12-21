@@ -106,7 +106,13 @@ class SikuV2Api:
         self._req_counter = 0
 
     def _new_request_id(self) -> str:
-        """Return a request id for log correlation."""
+        """Return a request id for log correlation.
+
+        Note: This method is not protected by self._lock since it's called
+        before entering the lock context. The counter increment is not
+        atomic, but collisions are unlikely and request IDs are for
+        debugging only, not for correctness.
+        """
         self._req_counter = (self._req_counter + 1) % 1_000_000
         return f"v2-{int(time.time() * 1000)}-{self._req_counter:06d}-{random.randint(0, 9999):04d}"
 
@@ -258,8 +264,10 @@ class SikuV2Api:
 
         request_id = self._new_request_id()
         total_attempts = len(RETRY_DELAYS)
+        overall_start_time = time.time()
+
         for attempt_index, delay in enumerate(RETRY_DELAYS):
-            start_time = time.time()
+            attempt_start_time = time.time()
             try:
                 if func == FUNC_WRITE:
                     LOGGER.debug(
@@ -270,7 +278,7 @@ class SikuV2Api:
                     )
                     async with self._lock:
                         await self._udp.send_only(packet_data, request_id=request_id)
-                    elapsed = time.time() - start_time
+                    elapsed = time.time() - attempt_start_time
                     LOGGER.debug(
                         "[%s:%d req=%s] WRITE command completed in %.3f seconds",
                         self.host,
@@ -293,7 +301,7 @@ class SikuV2Api:
                     result_data = await self._udp.request(
                         packet_data, timeout=REQUEST_TIMEOUT, request_id=request_id
                     )
-                elapsed = time.time() - start_time
+                elapsed = time.time() - attempt_start_time
                 LOGGER.debug(
                     "[%s:%d req=%s] %s request completed in %.3f seconds",
                     self.host,
@@ -323,7 +331,8 @@ class SikuV2Api:
                 )
                 return result_hexlist
             except (asyncio.TimeoutError, TimeoutError) as ex:
-                elapsed = time.time() - start_time
+                elapsed = time.time() - attempt_start_time
+                total_elapsed = time.time() - overall_start_time
                 LOGGER.warning(
                     "[%s:%d req=%s] %s request timed out after %.3f seconds (attempt %d/%d). "
                     "Packet: %s, Error: %s",
@@ -334,22 +343,24 @@ class SikuV2Api:
                     elapsed,
                     attempt_index + 1,
                     total_attempts,
-                    packet_str[:40] + "..." if len(packet_str) > 40 else packet_str,
+                    packet_str,
                     type(ex).__name__,
                 )
                 if attempt_index == total_attempts - 1:
                     raise TimeoutError(
                         f"Failed to send {func_name} command to {self.host}:{self.port} "
-                        f"after {total_attempts} attempts (last attempt duration: {elapsed:.3f}s, req={request_id})"
+                        f"after {total_attempts} attempts (total time: {total_elapsed:.3f}s, req={request_id})"
                     ) from ex
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
             except OSError as ex:
-                # Retry transient socket errors (e.g., connection lost, network unreachable)
-                elapsed = time.time() - start_time
+                # Treat network/socket errors as transient and retry, since the
+                # underlying UDP client may have closed its socket on exception.
+                elapsed = time.time() - attempt_start_time
+                total_elapsed = time.time() - overall_start_time
                 LOGGER.warning(
-                    "[%s:%d req=%s] %s socket error after %.3f seconds (attempt %d/%d). "
-                    "Packet: %s, Error: %s - %s",
+                    "[%s:%d req=%s] %s request failed with network error after %.3f seconds "
+                    "(attempt %d/%d). Packet: %s, Error: %s",
                     self.host,
                     self.port,
                     request_id,
@@ -357,18 +368,18 @@ class SikuV2Api:
                     elapsed,
                     attempt_index + 1,
                     total_attempts,
-                    packet_str[:40] + "..." if len(packet_str) > 40 else packet_str,
-                    type(ex).__name__,
-                    str(ex),
+                    packet_str,
+                    f"{type(ex).__name__}: {ex}",
                 )
                 if attempt_index == total_attempts - 1:
-                    raise OSError(
-                        f"Failed to send {func_name} command to {self.host}:{self.port} "
-                        f"after {total_attempts} attempts due to socket error: {ex} (req={request_id})"
-                    ) from ex
+                    # On the final attempt, propagate the original network error.
+                    raise
+                # Close and re-create the UDP client in case the previous error closed the socket.
+                async with self._lock:
+                    await self._udp.close()
+                    self._udp = AsyncUdpClient(self.host, self.port)
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
-        raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
     async def _translate_response(self, data: dict) -> dict:
         """Translate response data to dict."""
