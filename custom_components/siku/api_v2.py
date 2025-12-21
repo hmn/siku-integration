@@ -375,8 +375,9 @@ class SikuV2Api:
                     # On the final attempt, propagate the original network error.
                     raise
                 # Close and re-create the UDP client in case the previous error closed the socket.
-                await self._udp.close()
-                self._udp = AsyncUdpClient(self.host, self.port)
+                async with self._lock:
+                    await self._udp.close()
+                    self._udp = AsyncUdpClient(self.host, self.port)
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
 
