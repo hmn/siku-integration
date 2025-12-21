@@ -344,7 +344,7 @@ class SikuV2Api:
                     ) from ex
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
-            except (OSError, ConnectionError) as ex:
+            except OSError as ex:
                 # Retry transient socket errors (e.g., connection lost, network unreachable)
                 elapsed = time.time() - start_time
                 LOGGER.warning(
