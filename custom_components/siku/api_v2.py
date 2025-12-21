@@ -344,6 +344,30 @@ class SikuV2Api:
                     ) from ex
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
+            except OSError as ex:
+                # Retry transient socket errors (e.g., connection lost, network unreachable)
+                elapsed = time.time() - start_time
+                LOGGER.warning(
+                    "[%s:%d req=%s] %s socket error after %.3f seconds (attempt %d/%d). "
+                    "Packet: %s, Error: %s - %s",
+                    self.host,
+                    self.port,
+                    request_id,
+                    func_name,
+                    elapsed,
+                    attempt_index + 1,
+                    total_attempts,
+                    packet_str[:40] + "..." if len(packet_str) > 40 else packet_str,
+                    type(ex).__name__,
+                    str(ex),
+                )
+                if attempt_index == total_attempts - 1:
+                    raise OSError(
+                        f"Failed to send {func_name} command to {self.host}:{self.port} "
+                        f"after {total_attempts} attempts due to socket error: {ex} (req={request_id})"
+                    ) from ex
+                sleep_for = delay + random.uniform(0, 0.15)
+                await asyncio.sleep(sleep_for)
         raise LookupError(f"Failed to send command to {self.host}:{self.port}")
 
     async def _translate_response(self, data: dict) -> dict:
