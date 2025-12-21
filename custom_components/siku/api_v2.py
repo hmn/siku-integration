@@ -353,7 +353,7 @@ class SikuV2Api:
                     ) from ex
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
-            except (OSError, ConnectionError) as ex:
+            except OSError as ex:
                 # Treat network/socket errors as transient and retry, since the
                 # underlying UDP client may have closed its socket on exception.
                 elapsed = time.time() - attempt_start_time
@@ -374,7 +374,8 @@ class SikuV2Api:
                 if attempt_index == total_attempts - 1:
                     # On the final attempt, propagate the original network error.
                     raise
-                # Re-create the UDP client in case the previous error closed the socket.
+                # Close and re-create the UDP client in case the previous error closed the socket.
+                await self._udp.close()
                 self._udp = AsyncUdpClient(self.host, self.port)
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
