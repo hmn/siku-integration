@@ -69,6 +69,9 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _update_method(self) -> dict[str, int | str]:
         """Get the latest data from Siku fan and updates the state."""
+        LOGGER.debug(
+            "Updating Siku Fan status from %s:%d", self.api.host, self.api.port
+        )
         start_time = time.time()
         try:
             data: dict = await self.api.status()

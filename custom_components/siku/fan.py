@@ -179,24 +179,57 @@ class SikuFan(SikuEntity, FanEntity):
             preset_mode = PRESET_MODE_MANUAL
         await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode)
         await self.hass.async_add_executor_job(self.oscillate, oscillating)
+        if not oscillating:
+            await self.hass.async_add_executor_job(
+                self.set_direction, DIRECTIONS[DIRECTION_FORWARD]
+            )
         self.async_write_ha_state()
 
     def set_direction(self, direction: str | None) -> None:
-        """Set the direction of the fan."""
+        """Set the direction of the fan.
+
+        direction -- one of the text strings in DIRECTIONS values or None for oscillating
+        """
         self._attr_current_direction = direction
 
     async def async_set_direction(self, direction: str) -> None:
-        """Set the direction of the fan."""
-        await self.coordinator.api.direction(direction)
+        """Set the direction of the fan.
+
+        direction -- one of the text strings in DIRECTIONS values
+        """
+        # make sure direction is valid and is one of the text strings in DIRECTIONS values
+        if not isinstance(direction, str) or direction not in DIRECTIONS.values():
+            LOGGER.error(
+                "Invalid direction: %s expected one of %s",
+                direction,
+                list(DIRECTIONS.values()),
+            )
+            return
+        # use the numeric value for the api's direction
+        direction_key: str = next(
+            (key for key, value in DIRECTIONS.items() if value == direction), ""
+        )
+        await self.coordinator.api.direction(direction_key)
         await self.hass.async_add_executor_job(self.set_direction, direction)
-        if self.oscillating:
-            await self.hass.async_add_executor_job(self.oscillate, False)
+        if direction != DIRECTIONS[DIRECTION_ALTERNATING]:
+            oscilate = False
+        else:
+            oscilate = True
+        await self.hass.async_add_executor_job(self.oscillate, oscilate)
         if self.coordinator.data["manual_speed_selected"]:
             await self.hass.async_add_executor_job(
                 self.set_preset_mode, PRESET_MODE_MANUAL
             )
-        else:
-            await self.hass.async_add_executor_job(self.set_preset_mode, PRESET_MODE_ON)
+        elif self.coordinator.data["speed"] in FAN_SPEEDS:
+            if oscilate:
+                if self.oscillating:
+                    await self.hass.async_add_executor_job(
+                        self.set_preset_mode, PRESET_MODE_AUTO
+                    )
+            else:
+                await self.hass.async_add_executor_job(
+                    self.set_preset_mode, PRESET_MODE_ON
+                )
         self.async_write_ha_state()
 
     async def async_turn_on(
@@ -279,6 +312,7 @@ class SikuFan(SikuEntity, FanEntity):
         if self.coordinator.data is None:
             return
         if self.coordinator.data["is_on"]:
+            LOGGER.debug("Fan is on")
             if self.coordinator.data["manual_speed_selected"]:
                 LOGGER.debug(
                     "Setting manual speed from selection %s and speed %s",
@@ -294,14 +328,9 @@ class SikuFan(SikuEntity, FanEntity):
                 self.set_preset_mode(PRESET_MODE_MANUAL)
             elif self.coordinator.data["speed_list"]:
                 LOGGER.debug(
-                    "Setting percentage from speed %s", self.coordinator.data["speed"]
-                )
-                LOGGER.debug(
-                    "Setting percentage from speed %s",
+                    "Setting speed preset from speed %s list %s type %s",
+                    self.coordinator.data["speed"],
                     self.coordinator.data["speed_list"],
-                )
-                LOGGER.debug(
-                    "Setting percentage from speed type %s",
                     type(self.coordinator.data["speed"]),
                 )
                 self.set_percentage(
@@ -310,37 +339,47 @@ class SikuFan(SikuEntity, FanEntity):
                         self.coordinator.data["speed"],
                     )
                 )
-                if not self.coordinator.data["oscillating"] and self.coordinator.data[
-                    "direction"
-                ] != int(DIRECTION_ALTERNATING):
-                    self.set_preset_mode(PRESET_MODE_ON)
-                else:
+                if (
+                    self.coordinator.data["oscillating"]
+                    or self.coordinator.data["direction"] is None
+                    or self.coordinator.data["direction"]
+                    == DIRECTIONS[DIRECTION_ALTERNATING]
+                ):
                     self.set_preset_mode(PRESET_MODE_AUTO)
+                else:
+                    self.set_preset_mode(PRESET_MODE_ON)
             else:
+                LOGGER.debug(
+                    "Setting speed from speed %s type %s",
+                    self.coordinator.data["speed"],
+                    type(self.coordinator.data["speed"]),
+                )
                 self.set_percentage(
                     ordered_list_item_to_percentage(
                         FAN_SPEEDS, self.coordinator.data["speed"]
                     )
                 )
-                if not self.coordinator.data["oscillating"] and self.coordinator.data[
-                    "direction"
-                ] != int(DIRECTION_ALTERNATING):
-                    self.set_preset_mode(PRESET_MODE_ON)
-                else:
+                if (
+                    self.coordinator.data["oscillating"]
+                    or self.coordinator.data["direction"] is None
+                    or self.coordinator.data["direction"]
+                    == DIRECTIONS[DIRECTION_ALTERNATING]
+                ):
                     self.set_preset_mode(PRESET_MODE_AUTO)
+                else:
+                    self.set_preset_mode(PRESET_MODE_ON)
         else:
+            LOGGER.debug("Fan is off")
             self.set_percentage(0)
-        if not self.coordinator.data["oscillating"] and self.coordinator.data[
-            "direction"
-        ] != int(DIRECTION_ALTERNATING):
-            self.oscillate(False)
-            if isinstance(self.coordinator.data["direction"], int):
-                direction = f"{self.coordinator.data['direction']:02}"
-            else:
-                direction = self.coordinator.data["direction"]
-            mapped_direction = DIRECTIONS.get(direction, DIRECTIONS[DIRECTION_FORWARD])
-            self.set_direction(mapped_direction)
-        else:
+
+        if (
+            self.coordinator.data["oscillating"]
+            or self.coordinator.data["direction"] is None
+            or self.coordinator.data["direction"] == DIRECTIONS[DIRECTION_ALTERNATING]
+        ):
             self.oscillate(True)
+        else:
+            self.oscillate(False)
+            self.set_direction(self.coordinator.data["direction"])
 
         super()._handle_coordinator_update()

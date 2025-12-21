@@ -430,19 +430,30 @@ class SikuV1Api:
 
     async def direction(self, direction: str | int) -> dict:
         """Set fan direction."""
-        # if direction is in DIRECTIONS values translate it to the key value
-        # NOTE: cleanup desired
-        if direction in DIRECTIONS.values():
-            direction = list(DIRECTIONS.keys())[
-                list(DIRECTIONS.values()).index(str(direction))
-            ]
-        if direction not in DIRECTIONS:
-            raise ValueError(f"Invalid fan direction: {direction}")
+        if isinstance(direction, int):
+            direction = f"{direction:02d}"
+        if isinstance(direction, str):
+            if not direction.isdigit():
+                raise ValueError(
+                    f"Invalid fan direction {direction} expected one of {list(DIRECTIONS.keys())}"
+                )
+            # must be nummeric and one of the keys in DIRECTIONS
+            if direction not in DIRECTIONS:
+                raise ValueError(
+                    f"Invalid fan direction {direction} expected one of {list(DIRECTIONS.keys())}"
+                )
+        else:
+            raise TypeError("Direction must be a string or integer")
         direction = Direction(int(direction))
         data = await self._control_packet([("direction", direction)])
         hexlist = await self._send_command(data)
         result = await self._translate_response(hexlist)
-        LOGGER.info("Set direction to %s : %s", direction, result["direction"])
+        LOGGER.info(
+            "Set direction to %s %s response %s",
+            direction.name if hasattr(direction, "name") else Direction(direction),
+            direction,
+            result["direction"],
+        )
         return await self._format_response(result)
 
     async def sleep(self) -> dict:
@@ -653,6 +664,12 @@ class SikuV1Api:
 
     async def _format_response(self, data: dict) -> dict:
         """Format response for entities."""
+        try:
+            direction = DIRECTIONS[f"{data['direction']:02d}"]
+            oscillating = bool(data["direction"] == Direction.HEAT_RECOVERY)
+        except KeyError:
+            direction = None
+            oscillating = True
         return {
             "is_on": bool(data["status"] == OffOn.ON),
             "speed": int(data["speed"]),
@@ -665,12 +682,8 @@ class SikuV1Api:
                 float(SPEED_MANUAL_LOW),
                 float(SPEED_MANUAL_MAX),
             ),
-            "oscillating": bool(data["direction"] == Direction.HEAT_RECOVERY),
-            "direction": (
-                data["direction"]
-                if data["direction"] == Direction.HEAT_RECOVERY
-                else None
-            ),
+            "oscillating": oscillating,
+            "direction": direction,
             "mode": data["operation_mode"],
             "humidity": int(data["humidity_level"]),
             "alarm": bool(data["filter_end_of_life"] == NoYes.YES),
