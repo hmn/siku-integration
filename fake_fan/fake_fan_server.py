@@ -247,7 +247,11 @@ class FakeFanController:
             LOGGER.info(f"✓ Manual speed set to: {int(value, 16)} ({percentage:.1f}%)")
         elif command == COMMAND_DIRECTION:
             self.direction = value
-            direction_names = {"00": "Forward", "01": "Reverse", "02": "Alternating"}
+            direction_names = {
+                "00": "Forward (ventilation)",
+                "01": "Alternating (heat recovery)",
+                "02": "Reverse (supply)",
+            }
             LOGGER.info(f"✓ Direction set to: {direction_names.get(value, value)}")
         elif command == COMMAND_BOOST:
             self.boost = value != "00"
