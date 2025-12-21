@@ -437,7 +437,7 @@ class SikuV1Api:
                 raise ValueError(
                     f"Invalid fan direction {direction} expected one of {list(DIRECTIONS.keys())}"
                 )
-            # must be nummeric and one of the keys in DIRECTIONS
+            # must be numeric and one of the keys in DIRECTIONS
             if direction not in DIRECTIONS:
                 raise ValueError(
                     f"Invalid fan direction {direction} expected one of {list(DIRECTIONS.keys())}"

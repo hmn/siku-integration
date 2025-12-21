@@ -212,20 +212,19 @@ class SikuFan(SikuEntity, FanEntity):
         await self.coordinator.api.direction(direction_key)
         await self.hass.async_add_executor_job(self.set_direction, direction)
         if direction != DIRECTIONS[DIRECTION_ALTERNATING]:
-            oscilate = False
+            oscillate = False
         else:
-            oscilate = True
-        await self.hass.async_add_executor_job(self.oscillate, oscilate)
+            oscillate = True
+        await self.hass.async_add_executor_job(self.oscillate, oscillate)
         if self.coordinator.data["manual_speed_selected"]:
             await self.hass.async_add_executor_job(
                 self.set_preset_mode, PRESET_MODE_MANUAL
             )
         elif self.coordinator.data["speed"] in FAN_SPEEDS:
-            if oscilate:
-                if self.oscillating:
-                    await self.hass.async_add_executor_job(
-                        self.set_preset_mode, PRESET_MODE_AUTO
-                    )
+            if oscillate:
+                await self.hass.async_add_executor_job(
+                    self.set_preset_mode, PRESET_MODE_AUTO
+                )
             else:
                 await self.hass.async_add_executor_job(
                     self.set_preset_mode, PRESET_MODE_ON
