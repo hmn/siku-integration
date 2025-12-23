@@ -4,16 +4,31 @@
       "already_configured": "Enheden er allerede konfigureret"
     },
     "error": {
-      "value_error": "Værdierne i formen er forkerte",
-      "timeout_error": "Timeout-fejl, kunne ikke hente status",
-      "cannot_connect": "Kunne ikke forbinde",
-      "invalid_auth": "Ugyldig godkendelse",
-      "invalid_idnum": "Ugyldig godkendelse, idnum skal være 16 tegn og kan findes på enheden, på nogle modeller kan DEFAULT_DEVICEID bruges",
-      "invalid_password": "Ugyldig godkendelse, kodeordet kan maksimalt være 8 tegn og standarden er 1111",
-      "unknown": "Uventet fejl"
+      "required": "Dette felt er påkrævet.",
+      "invalid": "Ugyldig indtastning.",
+      "value_error": "Værdierne i formen er forkerte. [{exception}]",
+      "timeout_error": "Timeout-fejl, kunne ikke hente status. [{exception}]",
+      "cannot_connect": "Kunne ikke forbinde. [{exception}]",
+      "invalid_auth": "Ugyldig godkendelse.",
+      "invalid_v2_required": "Ugyldig input, idnum og kodeord kræves for v2.",
+      "invalid_idnum": "Ugyldig godkendelse, idnum skal være 16 tegn og kan findes på enheden, på nogle modeller kan DEFAULT_DEVICEID bruges.",
+      "invalid_password": "Ugyldig godkendelse, kodeordet kan maksimalt være 8 tegn og standarden er 1111.",
+      "entry_not_found": "Eksisterende enhed med unik id IP:PORT ikke fundet. [{exception}]",
+      "unknown": "Uventet fejl. [{exception}]"
     },
     "step": {
       "user": {
+        "description": "Konfigurer Siku-blæserens forbindelse.",
+        "data": {
+          "ip_address": "IP-adresse",
+          "port": "Port",
+          "version": "Hardware version",
+          "idnum": "Blæser ID (kun v2)",
+          "password": "Blæser kodeord (kun v2)"
+        }
+      },
+      "reconfigure_confirm": {
+        "description": "Opdater Siku-blæserens forbindelsesindstillinger.",
         "data": {
           "ip_address": "IP-adresse",
           "port": "Port",

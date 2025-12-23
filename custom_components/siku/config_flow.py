@@ -39,7 +39,9 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]):
         api = SikuV1Api(data[CONF_IP_ADDRESS], data[CONF_PORT])
     elif data[CONF_VERSION] == 2:
         if CONF_ID not in data or CONF_PASSWORD not in data:
-            raise ValueError("Invalid input")
+            raise InvalidInputV2Required(
+                "Invalid input, idnum and password required for v2"
+            )
         if len(data[CONF_ID]) != 16:
             raise InvalidInputFanId("Invalid idnum length must be 16 chars")
         if len(data[CONF_PASSWORD]) > 8:
@@ -68,6 +70,7 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
+        description_placeholders: dict[str, str] = {}
         if user_input is not None:
             host = user_input[CONF_IP_ADDRESS]
             port = user_input[CONF_PORT]
@@ -81,27 +84,42 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
                     title=title,
                     data=user_input,
                 )
-            except (ValueError, KeyError):
+            except (ValueError, KeyError) as exc:
                 errors["base"] = "value_error"
-            except TimeoutError:
+                description_placeholders = {"exception": f"{str(exc)}"}
+            except TimeoutError as exc:
                 errors["base"] = "timeout_error"
-            except CannotConnect:
+                description_placeholders = {"exception": f"{str(exc)}"}
+            except CannotConnect as exc:
                 errors["base"] = "cannot_connect"
+                errors["ip_address"] = "invalid"
+                errors["port"] = "invalid"
+                description_placeholders = {"exception": f"{str(exc)}"}
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+                errors["idnum"] = "invalid_idnum"
+                errors["password"] = "invalid_password"
+            except InvalidInputV2Required:
+                errors["base"] = "invalid_v2_required"
+                errors["idnum"] = "invalid_idnum"
+                errors["password"] = "invalid_password"
             except InvalidInputFanId:
                 errors["base"] = "invalid_idnum"
+                errors["idnum"] = "invalid_idnum"
             except InvalidInputPassword:
                 errors["base"] = "invalid_password"
                 errors["password"] = "invalid_password"
-            except Exception:  # pylint: disable=broad-except
-                LOGGER.exception("Unexpected exception")
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.exception(
+                    f"Unexpected exception during reconfiguration, {str(exc)}"
+                )
                 errors["base"] = "unknown"
-
+                description_placeholders = {"exception": f"{str(exc)}"}
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
             errors=errors,
+            description_placeholders=description_placeholders,
         )
 
     async def async_step_reauth(
@@ -121,25 +139,41 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle integration reconfiguration."""
         errors: dict[str, str] = {}
+        description_placeholders: dict[str, str] = {}
         if user_input is not None:
             try:
                 await validate_input(self.hass, user_input)
-            except (ValueError, KeyError):
+            except (ValueError, KeyError) as exc:
                 errors["base"] = "value_error"
-            except TimeoutError:
+                description_placeholders = {"exception": f"{str(exc)}"}
+            except TimeoutError as exc:
                 errors["base"] = "timeout_error"
-            except CannotConnect:
+                description_placeholders = {"exception": f"{str(exc)}"}
+            except CannotConnect as exc:
                 errors["base"] = "cannot_connect"
+                errors["ip_address"] = "invalid"
+                errors["port"] = "invalid"
+                description_placeholders = {"exception": f"{str(exc)}"}
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+                errors["idnum"] = "invalid_idnum"
+                errors["password"] = "invalid_password"
+            except InvalidInputV2Required:
+                errors["base"] = "invalid_v2_required"
+                errors["idnum"] = "invalid_idnum"
+                errors["password"] = "invalid_password"
             except InvalidInputFanId:
                 errors["base"] = "invalid_idnum"
+                errors["idnum"] = "invalid_idnum"
             except InvalidInputPassword:
                 errors["base"] = "invalid_password"
                 errors["password"] = "invalid_password"
-            except Exception:  # pylint: disable=broad-except
-                LOGGER.exception("Unexpected exception")
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.exception(
+                    f"Unexpected exception during reconfiguration, {str(exc)}"
+                )
                 errors["base"] = "unknown"
+                description_placeholders = {"exception": f"{str(exc)}"}
             else:
                 host = user_input[CONF_IP_ADDRESS]
                 port = user_input[CONF_PORT]
@@ -167,6 +201,7 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure_confirm",
             data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
             errors=errors,
+            description_placeholders=description_placeholders,
         )
 
 
@@ -184,3 +219,7 @@ class InvalidInputFanId(HomeAssistantError):
 
 class InvalidInputPassword(HomeAssistantError):
     """Error to indicate there is invalid fan password defined."""
+
+
+class InvalidInputV2Required(HomeAssistantError):
+    """Error to indicate v2 input is required."""
