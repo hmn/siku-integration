@@ -2,6 +2,17 @@
   "config": {
     "step": {
       "user": {
+        "description": "[%key:common::config_flow::step::user::description%]",
+        "data": {
+          "ip_address": "[%key:common::config_flow::data::ip_address%]",
+          "port": "[%key:common::config_flow::data::port%]",
+          "version": "[%key:common::config_flow::data::version%]",
+          "idnum": "[%key:common::config_flow::data::idnum%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        }
+      },
+      "reconfigure_confirm": {
+        "description": "[%key:common::config_flow::step::reconfigure_confirm::description%]",
         "data": {
           "ip_address": "[%key:common::config_flow::data::ip_address%]",
           "port": "[%key:common::config_flow::data::port%]",
@@ -12,14 +23,22 @@
       }
     },
     "error": {
+      "required": "[%key:common::config_flow::error::required%]",
+      "invalid": "[%key:common::config_flow::error::invalid%]",
       "value_error": "[%key:common::config_flow::error::value_error%]",
       "timeout_error": "[%key:common::config_flow::error::timeout_error%]",
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "invalid_v2_required": "[%key:common::config_flow::error::invalid_v2_required%]",
+      "invalid_idnum": "[%key:common::config_flow::error::invalid_idnum%]",
+      "invalid_password": "[%key:common::config_flow::error::invalid_password%]",
+      "entry_not_found": "[%key:common::config_flow::error::entry_not_found%]",
+      "already_configured": "[%key:common::config_flow::error::already_configured_device%]",
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reconfigure_successful": "Reconfiguration successful"
     }
   }
 }

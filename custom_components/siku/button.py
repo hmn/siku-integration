@@ -89,7 +89,9 @@ class SikuButton(SikuEntity, ButtonEntity):
         self.hass = hass
         self.entity_description = description
         self._attr_device_info = coordinator.device_info
-        self._attr_unique_id = f"{DOMAIN}-{coordinator.api.host}-{coordinator.api.port}-{description.key}-button"
+        self._attr_unique_id = (
+            f"{DOMAIN}-{coordinator.config_entry.entry_id}-{description.key}-button"
+        )
         LOGGER.debug("Add Siku button entity %s", self._attr_unique_id)
 
     async def async_press(self) -> None:

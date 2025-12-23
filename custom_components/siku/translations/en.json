@@ -1,19 +1,36 @@
 {
   "config": {
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "Device is already configured",
+      "reconfigure_successful": "Reconfiguration successful"
     },
     "error": {
-      "value_error": "Incorrect values defined in form",
-      "timeout_error": "Timeout error, failed to get status",
-      "cannot_connect": "Failed to connect",
-      "invalid_auth": "Invalid authentication",
-      "invalid_idnum": "Invalid authentication, idnum must be 16 chars and can be found on the fan, on some models DEFAULT_DEVICEID can be used",
-      "invalid_password": "Invalid authentication, password max size is 8 chars and default is 1111",
-      "unknown": "Unexpected error"
+      "required": "This field is required.",
+      "invalid": "Invalid input.",
+      "value_error": "Incorrect values defined in form. [{exception}]",
+      "timeout_error": "Timeout error, failed to get status. [{exception}]",
+      "cannot_connect": "Failed to connect. [{exception}]",
+      "invalid_auth": "Invalid authentication.",
+      "invalid_v2_required": "Invalid input, idnum and password required for v2.",
+      "invalid_idnum": "Invalid authentication, idnum must be 16 chars and can be found on the fan, on some models DEFAULT_DEVICEID can be used.",
+      "invalid_password": "Invalid authentication, password max size is 8 chars and default is 1111.",
+      "entry_not_found": "Existing device with unique id {host}:{port} not found.",
+      "already_configured": "Device is already configured. Found existing device with unique id {unique_id}.",
+      "unknown": "Unexpected error. [{exception}]"
     },
     "step": {
       "user": {
+        "description": "Configure the Siku fan connection.",
+        "data": {
+          "ip_address": "IP address",
+          "port": "Port",
+          "version": "Hardware version",
+          "idnum": "Fan ID (only v2)",
+          "password": "Fan password (only v2)"
+        }
+      },
+      "reconfigure_confirm": {
+        "description": "Update the Siku fan connection settings.",
         "data": {
           "ip_address": "IP address",
           "port": "Port",
