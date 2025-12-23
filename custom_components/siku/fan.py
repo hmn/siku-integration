@@ -84,9 +84,7 @@ class SikuFan(SikuEntity, FanEntity):
         self.hass = hass
         self._attr_name = f"{DEFAULT_NAME} {coordinator.api.host}"
         self._attr_device_info = coordinator.device_info
-        self._attr_unique_id = (
-            f"{DOMAIN}-{coordinator.api.host}-{coordinator.api.port}-fan"
-        )
+        self._attr_unique_id = f"{DOMAIN}-{coordinator.config_entry.entry_id}-fan"
 
     @property
     def speed_count(self) -> int:

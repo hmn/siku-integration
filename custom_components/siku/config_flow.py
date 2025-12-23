@@ -8,7 +8,7 @@ from collections.abc import Mapping
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD, CONF_PORT
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
@@ -65,6 +65,8 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 1
 
+    _reconfigure_entry: ConfigEntry | None = None
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -89,6 +91,8 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
                 description_placeholders = {"exception": f"{str(exc)}"}
             except TimeoutError as exc:
                 errors["base"] = "timeout_error"
+                errors["ip_address"] = "invalid"
+                errors["port"] = "invalid"
                 description_placeholders = {"exception": f"{str(exc)}"}
             except CannotConnect as exc:
                 errors["base"] = "cannot_connect"
@@ -132,6 +136,11 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle integration reconfiguration."""
+        entry_id = self.context.get("entry_id")
+        if entry_id is None:
+            return self.async_abort(reason="entry_not_found")
+
+        self._reconfigure_entry = self.hass.config_entries.async_get_entry(entry_id)
         return await self.async_step_reconfigure_confirm()
 
     async def async_step_reconfigure_confirm(
@@ -140,6 +149,16 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle integration reconfiguration."""
         errors: dict[str, str] = {}
         description_placeholders: dict[str, str] = {}
+
+        entry = self._reconfigure_entry
+        if entry is None:
+            entry_id = self.context.get("entry_id")
+            if entry_id is not None:
+                entry = self.hass.config_entries.async_get_entry(entry_id)
+        if entry is None:
+            return self.async_abort(reason="entry_not_found")
+
+        suggested_values = dict(entry.data)
         if user_input is not None:
             try:
                 await validate_input(self.hass, user_input)
@@ -148,6 +167,8 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
                 description_placeholders = {"exception": f"{str(exc)}"}
             except TimeoutError as exc:
                 errors["base"] = "timeout_error"
+                errors["ip_address"] = "invalid"
+                errors["port"] = "invalid"
                 description_placeholders = {"exception": f"{str(exc)}"}
             except CannotConnect as exc:
                 errors["base"] = "cannot_connect"
@@ -177,29 +198,50 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 host = user_input[CONF_IP_ADDRESS]
                 port = user_input[CONF_PORT]
-                await self.async_set_unique_id(f"{host}:{port}")
-                self._abort_if_unique_id_configured()
-                # Find the existing entry to update
-                entry = next(
+
+                old_unique_id = entry.unique_id
+                if not old_unique_id:
+                    old_unique_id = (
+                        f"{entry.data.get(CONF_IP_ADDRESS)}:{entry.data.get(CONF_PORT)}"
+                    )
+
+                new_unique_id = f"{host}:{port}"
+
+                # Prevent collisions with other entries.
+                other_entry = next(
                     (
                         e
                         for e in self._async_current_entries()
-                        if e.unique_id == f"{host}:{port}"
+                        if e.unique_id == new_unique_id and e.entry_id != entry.entry_id
                     ),
                     None,
                 )
-                if entry is None:
-                    errors["base"] = "entry_not_found"
+                if other_entry is not None:
+                    errors["base"] = "already_configured"
+                    errors["ip_address"] = "invalid"
+                    errors["port"] = "invalid"
+                    description_placeholders = {"unique_id": new_unique_id}
                 else:
+                    # If unique_id is host:port, migrate it when user changes host/port.
+                    if new_unique_id != old_unique_id:
+                        self.hass.config_entries.async_update_entry(
+                            entry,
+                            unique_id=new_unique_id,
+                        )
+
                     return self.async_update_reload_and_abort(
                         entry=entry,
                         title=f"{DEFAULT_NAME} {host}",
                         data=user_input,
                     )
 
+            suggested_values = user_input
+
         return self.async_show_form(
             step_id="reconfigure_confirm",
-            data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
+            data_schema=self.add_suggested_values_to_schema(
+                USER_SCHEMA, suggested_values
+            ),
             errors=errors,
             description_placeholders=description_placeholders,
         )

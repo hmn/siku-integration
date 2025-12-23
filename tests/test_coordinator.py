@@ -26,6 +26,7 @@ def mock_hass():
 @pytest.fixture
 def config_entry_v1():
     entry = MagicMock()
+    entry.entry_id = "test_entry_id_v1"
     entry.data = {
         CONF_IP_ADDRESS: "192.168.1.10",
         CONF_PORT: 1234,
@@ -37,6 +38,7 @@ def config_entry_v1():
 @pytest.fixture
 def config_entry_v2():
     entry = MagicMock()
+    entry.entry_id = "test_entry_id_v2"
     entry.data = {
         CONF_IP_ADDRESS: "192.168.1.20",
         CONF_PORT: 5678,
@@ -73,7 +75,7 @@ def test_device_info_v1(mock_v1api, mock_hass, config_entry_v1):
     mock_v1api.return_value = mock_api
     coordinator = SikuDataUpdateCoordinator(mock_hass, config_entry_v1)
     info = coordinator.device_info
-    assert info.get("identifiers") == {(DOMAIN, "192.168.1.10:1234")}
+    assert info.get("identifiers") == {(DOMAIN, "test_entry_id_v1")}
     assert info.get("model") == DEFAULT_MODEL
     assert info.get("manufacturer") == DEFAULT_MANUFACTURER
     assert info.get("name") == f"{DEFAULT_NAME} 192.168.1.10"

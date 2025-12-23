@@ -36,8 +36,6 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the coordinator."""
-        self.config_entry = entry
-
         if entry.data[CONF_VERSION] == 1:
             self.api = SikuV1Api(entry.data[CONF_IP_ADDRESS], entry.data[CONF_PORT])
         else:
@@ -57,11 +55,18 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
             update_method=self._update_method,
         )
 
+        # Keep a stable reference to the config entry for unique_id generation.
+        self.config_entry = entry
+
     @property
     def device_info(self) -> DeviceInfo:
-        """Return the DeviceInfo of this Siku fan using IP as identifier."""
+        """Return the DeviceInfo of this Siku fan.
+
+        Note: Identifiers must be stable across IP/port changes to avoid creating
+        duplicate devices after reconfiguration.
+        """
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self.api.host}:{self.api.port}")},
+            identifiers={(DOMAIN, self.config_entry.entry_id)},
             model=DEFAULT_MODEL,
             manufacturer=DEFAULT_MANUFACTURER,
             name=self.name or f"{DEFAULT_NAME} {self.api.host}",

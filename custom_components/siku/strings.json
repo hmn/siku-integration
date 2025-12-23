@@ -33,10 +33,12 @@
       "invalid_idnum": "[%key:common::config_flow::error::invalid_idnum%]",
       "invalid_password": "[%key:common::config_flow::error::invalid_password%]",
       "entry_not_found": "[%key:common::config_flow::error::entry_not_found%]",
+      "already_configured": "[%key:common::config_flow::error::already_configured_device%]",
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reconfigure_successful": "Reconfiguration successful"
     }
   }
 }

@@ -169,7 +169,7 @@ class SikuSensor(SikuEntity, SensorEntity):
         self.entity_description = description
         self._attr_device_info = coordinator.device_info
         self._attr_unique_id = (
-            f"{DOMAIN}-{coordinator.api.host}-{coordinator.api.port}-{description.key}"
+            f"{DOMAIN}-{coordinator.config_entry.entry_id}-{description.key}"
         )
 
     @callback

@@ -1,7 +1,8 @@
 {
   "config": {
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "Device is already configured",
+      "reconfigure_successful": "Reconfiguration successful"
     },
     "error": {
       "required": "This field is required.",
@@ -13,7 +14,8 @@
       "invalid_v2_required": "Invalid input, idnum and password required for v2.",
       "invalid_idnum": "Invalid authentication, idnum must be 16 chars and can be found on the fan, on some models DEFAULT_DEVICEID can be used.",
       "invalid_password": "Invalid authentication, password max size is 8 chars and default is 1111.",
-      "entry_not_found": "Existing device with unique id IP:PORT not found. [{exception}]",
+      "entry_not_found": "Existing device with unique id {host}:{port} not found.",
+      "already_configured": "Device is already configured. Found existing device with unique id {unique_id}.",
       "unknown": "Unexpected error. [{exception}]"
     },
     "step": {

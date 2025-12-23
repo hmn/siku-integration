@@ -1,7 +1,8 @@
 {
   "config": {
     "abort": {
-      "already_configured": "Enheden er allerede konfigureret"
+      "already_configured": "Enheden er allerede konfigureret",
+      "reconfigure_successful": "Omkonfiguration lykkedes"
     },
     "error": {
       "required": "Dette felt er påkrævet.",
@@ -13,7 +14,8 @@
       "invalid_v2_required": "Ugyldig input, idnum og kodeord kræves for v2.",
       "invalid_idnum": "Ugyldig godkendelse, idnum skal være 16 tegn og kan findes på enheden, på nogle modeller kan DEFAULT_DEVICEID bruges.",
       "invalid_password": "Ugyldig godkendelse, kodeordet kan maksimalt være 8 tegn og standarden er 1111.",
-      "entry_not_found": "Eksisterende enhed med unik id IP:PORT ikke fundet. [{exception}]",
+      "entry_not_found": "Eksisterende enhed med unik id {host}:{port} ikke fundet.",
+      "already_configured": "Enheden er allerede konfigureret. Fandt eksisterende enhed med unik id {unique_id}.",
       "unknown": "Uventet fejl. [{exception}]"
     },
     "step": {
