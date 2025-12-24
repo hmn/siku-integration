@@ -1,9 +1,9 @@
-"""Constants for the Siku Fan integration."""
+"""Constants for the Siku (Blauberg) Fan integration."""
 
 DOMAIN = "siku"
 DEFAULT_MANUFACTURER = "Siku"
 DEFAULT_MODEL = "RV"
-DEFAULT_NAME = "Siku Fan"
+DEFAULT_NAME = "Siku (Blauberg) Fan"
 DEFAULT_PORT = 4000
 DEFAULT_IDNUM = "DEFAULT_DEVICEID"
 DEFAULT_PASSWORD = "1111"

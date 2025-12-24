@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Fake Siku Fan Controller Server for Testing.
+"""Fake Siku (Blauberg) Fan Controller Server for Testing.
 
-This script simulates a Siku fan controller that responds to UDP commands
+This script simulates a Siku (Blauberg) Fan controller that responds to UDP commands
 according to the protocol specification. It can be used for testing the
 Home Assistant integration without requiring physical hardware.
 
@@ -71,7 +71,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class FakeFanController:
-    """Simulates a Siku fan controller."""
+    """Simulates a Siku (Blauberg) Fan controller."""
 
     def __init__(self, device_id: str, password: str, slow_mode: bool = False):
         """Initialize the fake fan controller."""
@@ -438,7 +438,7 @@ class FakeFanController:
 def main():
     """Run the fake fan server."""
     parser = argparse.ArgumentParser(
-        description="Fake Siku Fan Controller Server for Testing",
+        description="Fake Siku (Blauberg) Fan Controller Server for Testing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -484,7 +484,7 @@ Examples:
     try:
         sock.bind((args.host, args.port))
         LOGGER.info("\n%s", "=" * 60)
-        LOGGER.info("Fake Siku Fan Server Started")
+        LOGGER.info("Fake Siku (Blauberg) Fan Server Started")
         LOGGER.info("Listening on %s:%s", args.host, args.port)
         LOGGER.info("%s\n", "=" * 60)
         LOGGER.info("Waiting for commands...\n")

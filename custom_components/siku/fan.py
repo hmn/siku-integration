@@ -1,4 +1,4 @@
-"""Siku fan."""
+"""Siku (Blauberg) Fan."""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Siku fan."""
-    LOGGER.debug("Setting up Siku fan")
+    """Set up the Siku (Blauberg) Fan."""
+    LOGGER.debug("Setting up Siku (Blauberg) Fan")
     LOGGER.debug("Entry: %s", entry.entry_id)
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
@@ -54,7 +54,7 @@ async def async_setup_entry(
 
 
 class SikuFan(SikuEntity, FanEntity):
-    """Siku Fan."""
+    """Siku (Blauberg) Fan."""
 
     _attr_supported_features = (
         FanEntityFeature.SET_SPEED

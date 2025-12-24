@@ -1,6 +1,6 @@
-# Fake Siku Fan Server
+# Fake Siku (Blauberg) Fan Server
 
-This script simulates a Siku fan controller for testing purposes. It implements the UDP protocol used by real Siku fans, allowing you to test the Home Assistant integration without physical hardware.
+This script simulates a Siku (Blauberg) Fan controller for testing purposes. It implements the UDP protocol used by real Siku (Blauberg) Fans, allowing you to test the Home Assistant integration without physical hardware.
 
 ## Quick Start
 
@@ -136,7 +136,7 @@ The server logs all incoming packets and responses, making it easy to:
 ## Tools Included
 
 ### `fake_fan_server.py`
-The main fake fan server that simulates a real Siku fan controller.
+The main fake fan server that simulates a real Siku (Blauberg) Fan controller.
 
 ### `test_fake_fan.py`
 Automated test script that exercises all fan commands. Great for verifying the server works.
@@ -163,7 +163,7 @@ python fake_fan/send_packet.py FDFD021031323334353637383930313233343536373839300
 
 ## Notes
 
-- The server uses UDP (like real Siku fans)
+- The server uses UDP (like real Siku (Blauberg) Fans)
 - Authentication is enforced (device ID + password must match)
 - Checksums are verified on all packets
 - All protocol functions are implemented (READ, WRITE, READ_WRITE, INC, DEC)

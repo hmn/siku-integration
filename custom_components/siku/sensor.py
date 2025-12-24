@@ -1,4 +1,4 @@
-"""Siku fan sensors."""
+"""Siku (Blauberg) Fan sensors."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclasses.dataclass(frozen=True)
 class SikuSensorEntityDescription(SensorEntityDescription):
-    """Describes Siku fan sensor entity."""
+    """Describes Siku (Blauberg) Fan sensor entity."""
 
 
 SENSORS: tuple[SikuSensorEntityDescription, ...] = (
@@ -134,8 +134,8 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Siku fan sensors."""
-    LOGGER.debug("Setting up Siku fan sensors %s", entry.entry_id)
+    """Set up the Siku (Blauberg) Fan sensors."""
+    LOGGER.debug("Setting up Siku (Blauberg) Fan sensors %s", entry.entry_id)
     coordinator = hass.data[DOMAIN][entry.entry_id]
     available_resources: set[str] = {k.lower() for k, _ in coordinator.data.items()}
     # LOGGER.debug("Available resources : %s", available_resources)

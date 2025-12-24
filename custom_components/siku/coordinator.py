@@ -60,7 +60,7 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return the DeviceInfo of this Siku fan.
+        """Return the DeviceInfo of this Siku (Blauberg) Fan.
 
         Note: Identifiers must be stable across IP/port changes to avoid creating
         duplicate devices after reconfiguration.
@@ -73,9 +73,11 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _update_method(self) -> dict[str, int | str]:
-        """Get the latest data from Siku fan and updates the state."""
+        """Get the latest data from Siku (Blauberg) Fan and updates the state."""
         LOGGER.debug(
-            "Updating Siku Fan status from %s:%d", self.api.host, self.api.port
+            "Updating Siku (Blauberg) Fan status from %s:%d",
+            self.api.host,
+            self.api.port,
         )
         start_time = time.time()
         try:
@@ -91,7 +93,7 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
         except TimeoutError as ex:
             elapsed = time.time() - start_time
             error_msg = (
-                f"Timeout connecting to Siku Fan at {self.api.host}:{self.api.port} "
+                f"Timeout connecting to Siku (Blauberg) Fan at {self.api.host}:{self.api.port} "
                 f"after {elapsed:.3f}s: {ex}"
             )
             self.logger.error(error_msg)
@@ -99,7 +101,7 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
         except (OSError, LookupError) as ex:
             elapsed = time.time() - start_time
             error_msg = (
-                f"Connection to Siku Fan at {self.api.host}:{self.api.port} failed "
+                f"Connection to Siku (Blauberg) Fan at {self.api.host}:{self.api.port} failed "
                 f"after {elapsed:.3f}s: {ex}"
             )
             self.logger.error(error_msg)

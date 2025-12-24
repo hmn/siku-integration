@@ -1,4 +1,4 @@
-"""Config flow for Siku Fan integration."""
+"""Config flow for Siku (Blauberg) Fan integration."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]):
 
 
 class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Siku Fan."""
+    """Handle a config flow for Siku (Blauberg) Fan."""
 
     VERSION = 1
     MINOR_VERSION = 1
@@ -115,7 +115,7 @@ class SikuConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["password"] = "invalid_password"
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.exception(
-                    f"Unexpected exception during reconfiguration, {str(exc)}"
+                    "Unexpected exception during reconfiguration, %s", str(exc)
                 )
                 errors["base"] = "unknown"
                 description_placeholders = {"exception": f"{str(exc)}"}

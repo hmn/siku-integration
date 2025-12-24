@@ -20,7 +20,7 @@
     },
     "step": {
       "user": {
-        "description": "Konfigurer Siku-blæserens forbindelse.",
+        "description": "Konfigurer Siku (Blauberg) blæserens forbindelse.",
         "data": {
           "ip_address": "IP-adresse",
           "port": "Port",
@@ -30,7 +30,7 @@
         }
       },
       "reconfigure_confirm": {
-        "description": "Opdater Siku-blæserens forbindelsesindstillinger.",
+        "description": "Opdater Siku (Blauberg) blæserens forbindelsesindstillinger.",
         "data": {
           "ip_address": "IP-adresse",
           "port": "Port",

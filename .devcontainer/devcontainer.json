@@ -1,6 +1,6 @@
 // See https://aka.ms/vscode-remote/devcontainer.json for format details.
 {
-  "name": "Siku Fan integration development",
+  "name": "Siku (Blauberg) Fan integration development",
   "image": "mcr.microsoft.com/vscode/devcontainers/python:3.13-bookworm",
   "postCreateCommand": "bash scripts/setup",
   "waitFor": "postCreateCommand",
@@ -11,7 +11,7 @@
       "onAutoForward": "notify"
     },
     "4000": {
-      "label": "Fake Siku Fan",
+      "label": "Fake Siku (Blauberg) Fan",
       "onAutoForward": "notify"
     }
   },

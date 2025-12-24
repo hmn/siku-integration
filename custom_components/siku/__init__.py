@@ -1,4 +1,4 @@
-"""The Siku Fan integration."""
+"""The Siku (Blauberg) Fan integration."""
 
 from __future__ import annotations
 import logging
@@ -143,7 +143,7 @@ async def _async_migrate_registries(hass: HomeAssistant, entry: ConfigEntry) -> 
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Siku Fan from a config entry."""
+    """Set up Siku (Blauberg) Fan from a config entry."""
 
     coordinator = SikuDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()

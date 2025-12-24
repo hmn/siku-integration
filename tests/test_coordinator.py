@@ -103,4 +103,4 @@ async def test_update_method_failure(mock_v1api, mock_hass, config_entry_v1):
     coordinator = SikuDataUpdateCoordinator(mock_hass, config_entry_v1)
     with pytest.raises(UpdateFailed) as exc:
         await coordinator._update_method()
-    assert "Timeout connecting to Siku Fan" in str(exc.value)
+    assert "Timeout connecting to Siku (Blauberg) Fan" in str(exc.value)

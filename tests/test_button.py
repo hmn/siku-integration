@@ -49,4 +49,4 @@ async def test_async_setup_entry_logs_debug(caplog):
 
     with caplog.at_level("DEBUG"):
         await button.async_setup_entry(hass, entry, async_add_entities)
-        assert f"Setting up Siku fan buttons {entry.entry_id}" in caplog.text
+        assert f"Setting up Siku (Blauberg) Fan buttons {entry.entry_id}" in caplog.text

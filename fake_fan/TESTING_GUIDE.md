@@ -1,4 +1,4 @@
-# Testing the Fake Siku Fan Server
+# Testing the Fake Siku (Blauberg) Fan Server
 
 ## Quick Start
 
@@ -18,7 +18,7 @@ You should see:
 2025-11-08 16:20:23,598 - INFO -   Password: 1234
 2025-11-08 16:20:23,598 - INFO -
 ============================================================
-2025-11-08 16:20:23,598 - INFO - Fake Siku Fan Server Started
+2025-11-08 16:20:23,598 - INFO - Fake Siku (Blauberg) Fan Server Started
 2025-11-08 16:20:23,598 - INFO - Listening on 0.0.0.0:4000
 2025-11-08 16:20:23,598 - INFO - ============================================================
 

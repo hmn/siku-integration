@@ -20,7 +20,7 @@
     },
     "step": {
       "user": {
-        "description": "Configure the Siku fan connection.",
+        "description": "Configure the Siku (Blauberg) Fan connection.",
         "data": {
           "ip_address": "IP address",
           "port": "Port",
@@ -30,7 +30,7 @@
         }
       },
       "reconfigure_confirm": {
-        "description": "Update the Siku fan connection settings.",
+        "description": "Update the Siku (Blauberg) Fan connection settings.",
         "data": {
           "ip_address": "IP address",
           "port": "Port",
