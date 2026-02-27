@@ -397,6 +397,7 @@ def _build_filter_timer_hexlist(
         hours_val:   0…23
         days_val:    0…181
         size:        total byte count sent by the device (spec=3, typical hardware=4)
+
     """
     if size < 3:
         raise ValueError("size must be >= 3 (spec minimum)")
