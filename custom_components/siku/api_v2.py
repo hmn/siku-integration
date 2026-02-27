@@ -419,13 +419,18 @@ class SikuV2Api:
         except KeyError:
             rpm = 0
         try:
+            LOGGER.debug("FILTER_TIMER raw: %s", data.get(COMMAND_FILTER_TIMER))
             # Byte 1: Minutes (0...59)
             # Byte 2: Hours (0...23)
             # Byte 3: Days (0...181)
-            days = int(data[COMMAND_FILTER_TIMER][0:2], 16)
-            hours = int(data[COMMAND_FILTER_TIMER][2:4], 16)
-            minutes = int(data[COMMAND_FILTER_TIMER][4:6], 16)
-            filter_timer = int(minutes + hours * 60 + days * 24 * 60)
+            # days = int(data[COMMAND_FILTER_TIMER][0:2], 16)
+            # hours = int(data[COMMAND_FILTER_TIMER][2:4], 16)
+            # minutes = int(data[COMMAND_FILTER_TIMER][4:6], 16)
+            # filter_timer = int(minutes + hours * 60 + days * 24 * 60)
+            minutes = int(data[COMMAND_FILTER_TIMER][6:8], 16)
+            hours = int(data[COMMAND_FILTER_TIMER][4:6], 16)
+            days = int(data[COMMAND_FILTER_TIMER][2:4], 16)
+            filter_timer = int(days * 24 * 60 + hours * 60 + minutes)
         except KeyError:
             filter_timer = 0
         try:
