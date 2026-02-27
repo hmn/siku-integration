@@ -6,6 +6,5 @@
         "github.vscode-github-actions",
         "ryanluker.vscode-coverage-gutters",
         "charliermarsh.ruff",
-        "GitHub.copilot",
-        "github.copilot-chat"
+        "GitHub.copilot-chat"
 }

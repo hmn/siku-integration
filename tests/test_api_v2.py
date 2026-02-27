@@ -150,7 +150,7 @@ async def test_status_manual(api):
         assert result["humidity"] == 51
         assert result["rpm"] == 900
         assert result["firmware"] == "0.7"
-        assert result["filter_timer_days"] == 5115
+        assert result["filter_timer_minutes"] == 123347
         assert result["timer_countdown"] == 0
         assert result["alarm"] is False
         assert result["version"] == "2"
@@ -340,3 +340,220 @@ def test_build_packet(api):
     assert isinstance(packet, str)
     assert packet.startswith("FDFD")
     assert len(packet) > 10
+
+
+# ---------------------------------------------------------------------------
+# Filter timer tests
+#
+# Per Blauberg spec (parameter 0x64):
+#   Byte 1: minutes (0…59)
+#   Byte 2: hours   (0…23)
+#   Byte 3: days    (0…181)
+#   Byte size: 3  (spec), but devices may send a larger size with leading 0x00 padding
+#
+# _parse_response receives bytes via RETURN_VALUE_SIZE (0xFE) and reverses
+# their byte order before storing them, so data["64"] is laid out as:
+#
+#   size=3 (spec):  [days][hours][minutes]               → 6 hex chars
+#   size=4 (padded):[00][days][hours][minutes]            → 8 hex chars
+#   size=5 (padded):[00][00][days][hours][minutes]        → 10 hex chars
+#
+# _translate_response uses negative indexing so minutes/hours/days are always
+# the last 3 bytes regardless of leading padding:
+#   minutes = raw[-2:]
+#   hours   = raw[-4:-2]
+#   days    = raw[-6:-4]
+#
+# _translate_response then computes:
+#   filter_timer_minutes = days * 24 * 60 + hours * 60 + minutes
+# ---------------------------------------------------------------------------
+
+_HEADER = (
+    ["FD", "FD", "02", "10"]
+    + ["30"] * 16  # 16 id bytes (arbitrary)
+    + ["08"]
+    + ["34"] * 8  # 8 password bytes (arbitrary)
+    + ["06"]  # FUNC_RESULT
+)
+_CHECKSUM = ["00", "00"]  # ignored by _parse_response iteration boundary
+
+
+def _build_filter_timer_hexlist(
+    minutes_val: int, hours_val: int, days_val: int, size: int = 4
+) -> list[str]:
+    """Build a minimal valid response hexlist containing only a filter timer field.
+
+    The packet structure mirrors what _parse_response expects:
+      FDFD + protocol(02) + id_size(10) + 16 id bytes + pass_size(08) +
+      8 password bytes + FUNC_RESULT(06) + data bytes + 2 checksum bytes.
+
+    The filter timer is sent as RETURN_VALUE_SIZE(FE) + size byte + cmd(64) +
+    <size> data bytes on the wire: [minutes, hours, days, 00 * (size-3)].
+    _parse_response reverses those bytes, producing data["64"] with the last
+    3 bytes always being [days, hours, minutes].
+
+    Args:
+        minutes_val: 0…59
+        hours_val:   0…23
+        days_val:    0…181
+        size:        total byte count sent by the device (spec=3, typical hardware=4)
+
+    """
+    if size < 3:
+        raise ValueError("size must be >= 3 (spec minimum)")
+    padding = ["00"] * (size - 3)
+    data_bytes = (
+        ["FE", f"{size:02X}", "64"]
+        + [f"{minutes_val:02X}", f"{hours_val:02X}", f"{days_val:02X}"]
+        + padding
+    )
+    return _HEADER + data_bytes + _CHECKSUM
+
+
+# --- translate-only tests (feed data["64"] directly) -----------------------
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_translate_missing_key(api):
+    """filter_timer_minutes defaults to 0 when the key is absent from the response."""
+    result = await api._translate_response({})
+    assert result["filter_timer_minutes"] == 0
+
+
+# size=3 (spec-exact, no padding) reversed layout: "DDHHMM"
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size3_min(api):
+    """size=3, all zeros → 0 minutes."""
+    result = await api._translate_response({"64": "000000"})
+    assert result["filter_timer_minutes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size3_max(api):
+    """size=3, spec max: 181d 23h 59m → 262079 minutes."""
+    # reversed: B5 17 3B
+    result = await api._translate_response({"64": "B5173B"})
+    assert result["filter_timer_minutes"] == 181 * 24 * 60 + 23 * 60 + 59  # 262079
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size3_only_minutes(api):
+    """size=3, only minutes set (30 min)."""
+    result = await api._translate_response({"64": "00001E"})
+    assert result["filter_timer_minutes"] == 30
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size3_only_hours(api):
+    """size=3, only hours set (12 h = 720 min)."""
+    result = await api._translate_response({"64": "000C00"})
+    assert result["filter_timer_minutes"] == 12 * 60  # 720
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size3_only_days(api):
+    """size=3, only days set (100 days = 144 000 min)."""
+    result = await api._translate_response({"64": "640000"})
+    assert result["filter_timer_minutes"] == 100 * 24 * 60  # 144000
+
+
+# size=4 (one padding byte, typical hardware) reversed layout: "00DDHHMM"
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size4_min(api):
+    """size=4 (1 padding byte), all zeros → 0 minutes."""
+    result = await api._translate_response({"64": "00000000"})
+    assert result["filter_timer_minutes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size4_max(api):
+    """size=4, spec max: 181d 23h 59m → 262079 minutes."""
+    result = await api._translate_response({"64": "00B5173B"})
+    assert result["filter_timer_minutes"] == 181 * 24 * 60 + 23 * 60 + 59  # 262079
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size4_known_debug_value(api):
+    """size=4, real debug capture: 23d 22h 20m → raw 00171614 → 34460 minutes."""
+    result = await api._translate_response({"64": "00171614"})
+    assert result["filter_timer_minutes"] == 23 * 24 * 60 + 22 * 60 + 20  # 34460
+
+
+# size=5 (two padding bytes) reversed layout: "0000DDHHMM"
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size5_min(api):
+    """size=5 (2 padding bytes), all zeros → 0 minutes."""
+    result = await api._translate_response({"64": "0000000000"})
+    assert result["filter_timer_minutes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_translate_size5_max(api):
+    """size=5, spec max: 181d 23h 59m → 262079 minutes."""
+    result = await api._translate_response({"64": "0000B5173B"})
+    assert result["filter_timer_minutes"] == 181 * 24 * 60 + 23 * 60 + 59  # 262079
+
+
+# --- parse + translate round-trip tests -------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_parse_size3_min(api):
+    """size=3 round-trip: all zeros → data["64"]='000000' → 0 minutes."""
+    hexlist = _build_filter_timer_hexlist(0, 0, 0, size=3)
+    data = await api._parse_response(hexlist)
+    assert data["64"] == "000000"
+    assert (await api._translate_response(data))["filter_timer_minutes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_parse_size3_max(api):
+    """size=3 round-trip: spec max 181d 23h 59m → data["64"]='B5173B' → 262079 min."""
+    hexlist = _build_filter_timer_hexlist(59, 23, 181, size=3)
+    data = await api._parse_response(hexlist)
+    assert data["64"] == "B5173B"
+    assert (await api._translate_response(data))[
+        "filter_timer_minutes"
+    ] == 181 * 24 * 60 + 23 * 60 + 59
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_parse_size4_min(api):
+    """size=4 (hardware default) round-trip: all zeros → data["64"]='00000000' → 0 min."""
+    hexlist = _build_filter_timer_hexlist(0, 0, 0, size=4)
+    data = await api._parse_response(hexlist)
+    assert data["64"] == "00000000"
+    assert (await api._translate_response(data))["filter_timer_minutes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_parse_size4_max(api):
+    """size=4 round-trip: spec max 181d 23h 59m → data["64"]='00B5173B' → 262079 min."""
+    hexlist = _build_filter_timer_hexlist(59, 23, 181, size=4)
+    data = await api._parse_response(hexlist)
+    assert data["64"] == "00B5173B"
+    assert (await api._translate_response(data))[
+        "filter_timer_minutes"
+    ] == 181 * 24 * 60 + 23 * 60 + 59
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_parse_size4_known_debug(api):
+    """size=4 round-trip: real debug capture 23d 22h 20m → data["64"]='00171614' → 34460 min."""
+    hexlist = _build_filter_timer_hexlist(20, 22, 23, size=4)
+    data = await api._parse_response(hexlist)
+    assert data["64"] == "00171614"
+    assert (await api._translate_response(data))[
+        "filter_timer_minutes"
+    ] == 23 * 24 * 60 + 22 * 60 + 20
+
+
+@pytest.mark.asyncio
+async def test_filter_timer_parse_size5_max(api):
+    """size=5 round-trip: spec max 181d 23h 59m → data["64"]='0000B5173B' → 262079 min."""
+    hexlist = _build_filter_timer_hexlist(59, 23, 181, size=5)
+    data = await api._parse_response(hexlist)
+    assert data["64"] == "0000B5173B"
+    assert (await api._translate_response(data))[
+        "filter_timer_minutes"
+    ] == 181 * 24 * 60 + 23 * 60 + 59
