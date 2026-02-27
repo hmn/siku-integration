@@ -419,17 +419,17 @@ class SikuV2Api:
         except KeyError:
             rpm = 0
         try:
-            LOGGER.debug("FILTER_TIMER raw: %s", data.get(COMMAND_FILTER_TIMER))
-            # Byte 1: Minutes (0...59)
-            # Byte 2: Hours (0...23)
-            # Byte 3: Days (0...181)
-            # days = int(data[COMMAND_FILTER_TIMER][0:2], 16)
-            # hours = int(data[COMMAND_FILTER_TIMER][2:4], 16)
-            # minutes = int(data[COMMAND_FILTER_TIMER][4:6], 16)
-            # filter_timer = int(minutes + hours * 60 + days * 24 * 60)
-            minutes = int(data[COMMAND_FILTER_TIMER][6:8], 16)
-            hours = int(data[COMMAND_FILTER_TIMER][4:6], 16)
-            days = int(data[COMMAND_FILTER_TIMER][2:4], 16)
+            raw = data[COMMAND_FILTER_TIMER]
+            LOGGER.debug("FILTER_TIMER raw: %s", raw)
+            # Spec (parameter 0x64): Byte1=minutes (0..59), Byte2=hours (0..23), Byte3=days (0..181).
+            # Byte size is 3 per spec but devices may pad with extra leading 0x00 bytes.
+            # _parse_response reverses the on-wire bytes, so after reversal the layout is:
+            #   [...padding bytes...][days][hours][minutes]  (each field is 2 hex chars).
+            # Use negative indexing so the last 3 bytes are always days/hours/minutes
+            # regardless of how many padding bytes precede them.
+            minutes = int(raw[-2:], 16)
+            hours = int(raw[-4:-2], 16)
+            days = int(raw[-6:-4], 16)
             filter_timer = int(days * 24 * 60 + hours * 60 + minutes)
         except KeyError:
             filter_timer = 0
@@ -473,7 +473,7 @@ class SikuV2Api:
             "humidity": humidity,
             "rpm": rpm,
             "firmware": firmware,
-            "filter_timer_days": filter_timer,
+            "filter_timer_minutes": filter_timer,
             "timer_countdown": timer_countdown,
             "alarm": alarm,
             "version": "2",

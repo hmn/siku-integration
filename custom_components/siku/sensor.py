@@ -67,11 +67,11 @@ SENSORS: tuple[SikuSensorEntityDescription, ...] = (
         icon="mdi:alarm-light",
     ),
     SikuSensorEntityDescription(
-        key="filter_timer_days",
+        key="filter_timer_minutes",
         name="Filter timer countdown",
         icon="mdi:timer",
         native_unit_of_measurement=UnitOfTime.MINUTES,
-        suggested_display_precision=0,
+        suggested_display_precision=2,
         suggested_unit_of_measurement=UnitOfTime.DAYS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,

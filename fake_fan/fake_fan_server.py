@@ -88,7 +88,9 @@ class FakeFanController:
         self.mode = MODE_OFF  # 01=sleep, 02=party
         self.humidity = 45  # Current humidity percentage
         self.rpm = 1200  # Fan RPM
-        self.filter_timer_minutes = 0  # Minutes since filter change
+        self.filter_timer_minutes = (
+            3 * 24 * 60 + 2 * 60 + 1
+        )  # Minutes since filter change ( 3 days 2 hours 1 minute = 4441)
         self.timer_countdown_seconds = 0  # Countdown timer in seconds
         self.alarm = False
         self.firmware_major = 2
@@ -194,21 +196,25 @@ class FakeFanController:
             else:
                 return (f"{self.rpm:02X}", False)
         elif command == COMMAND_FILTER_TIMER:
-            # Return as 3 bytes: days, hours, minutes
+            # On-wire byte order matches real device: [minutes, hours, days].
+            # _parse_response reverses bytes, so after reversal data["64"] = "DDHHMM".
+            # _translate_response then reads days/hours/minutes using negative indexing.
             days = self.filter_timer_minutes // (24 * 60)
             remaining = self.filter_timer_minutes % (24 * 60)
             hours = remaining // 60
             minutes = remaining % 60
             # Multi-byte value: FE + size + command + data
-            return (f"03{command}{days:02X}{hours:02X}{minutes:02X}", True)
+            return (f"03{command}{minutes:02X}{hours:02X}{days:02X}", True)
         elif command == COMMAND_TIMER_COUNTDOWN:
-            # Return as 3 bytes: hours, minutes, seconds
+            # Spec: Byte1=seconds, Byte2=minutes, Byte3=hours.
+            # _parse_response reverses bytes, so after reversal data["0B"] = "HHMMSS".
+            # _translate_response reads [0:2]=hours, [2:4]=minutes, [4:6]=seconds.
             hours = self.timer_countdown_seconds // 3600
             remaining = self.timer_countdown_seconds % 3600
             minutes = remaining // 60
             seconds = remaining % 60
             # Multi-byte value: FE + size + command + data
-            return (f"03{command}{hours:02X}{minutes:02X}{seconds:02X}", True)
+            return (f"03{command}{seconds:02X}{minutes:02X}{hours:02X}", True)
         elif command == COMMAND_READ_ALARM:
             return ("01" if self.alarm else "00", False)
         elif command == COMMAND_READ_FIRMWARE_VERSION:
