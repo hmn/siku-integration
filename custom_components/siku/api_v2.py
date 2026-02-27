@@ -419,6 +419,7 @@ class SikuV2Api:
         except KeyError:
             rpm = 0
         try:
+            LOGGER.debug("FILTER_TIMER raw: %s", data.get(COMMAND_FILTER_TIMER))
             # Byte 1: Minutes (0...59)
             # Byte 2: Hours (0...23)
             # Byte 3: Days (0...181)
