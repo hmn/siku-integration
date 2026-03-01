@@ -97,7 +97,9 @@ class SikuFan(SikuEntity, FanEntity):
         UI card from re-applying the same preset.  Siku fans always track
         on/off via percentage, so we base is_on solely on that.
         """
-        return self._attr_percentage is not None and self._attr_percentage > 0
+        if self._attr_percentage is None:
+            return None
+        return self._attr_percentage > 0
 
     @property
     def speed_count(self) -> int:
