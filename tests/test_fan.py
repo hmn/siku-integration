@@ -6,9 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 from custom_components.siku.fan import SikuFan
 from custom_components.siku.const import (
     DIRECTIONS,
-    DIRECTION_ALTERNATING,
     DIRECTION_FORWARD,
-    FAN_SPEEDS,
     PRESET_MODE_AUTO,
     PRESET_MODE_MANUAL,
     PRESET_MODE_ON,
