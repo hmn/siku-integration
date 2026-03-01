@@ -8,11 +8,5 @@
   "python.testing.pytestEnabled": true,
   "python.testing.pytestArgs": [
     "tests"
-  ],
-  "chat.tools.terminal.autoApprove": {
-    "/^python -m pytest /": {
-      "approve": true,
-      "matchCommandLine": true
-    }
-  }
+  ]
 }
