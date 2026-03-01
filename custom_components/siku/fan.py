@@ -87,6 +87,19 @@ class SikuFan(SikuEntity, FanEntity):
         self._attr_unique_id = f"{DOMAIN}-{coordinator.config_entry.entry_id}-fan"
 
     @property
+    def is_on(self) -> bool | None:
+        """Return true if the fan is on.
+
+        HA's default FanEntity formula is:
+            (percentage > 0) OR (preset_mode is not None)
+        That causes is_on=True whenever a non-None preset is retained after
+        turn-off (issue #147 fix), which hides the off state and prevents the
+        UI card from re-applying the same preset.  Siku fans always track
+        on/off via percentage, so we base is_on solely on that.
+        """
+        return self._attr_percentage is not None and self._attr_percentage > 0
+
+    @property
     def speed_count(self) -> int:
         """Return the number of speeds the fan supports."""
         if (
@@ -100,8 +113,9 @@ class SikuFan(SikuEntity, FanEntity):
         """Set the speed of the fan, as a percentage."""
         LOGGER.debug("Setting percentage to %s", percentage)
         self._attr_percentage = percentage
-        if percentage == 0:
-            self.set_preset_mode(None)
+        # Do NOT reset preset_mode to None when turning off.
+        # Doing so causes HA to raise "The default is invalid. Valid defaults
+        # are: auto, manual, on, party, sleep." (issue #147).
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
@@ -113,11 +127,9 @@ class SikuFan(SikuEntity, FanEntity):
         )
         if percentage == 0:
             await self.coordinator.api.power_off()
-            if (
-                self._attr_preset_mode != PRESET_MODE_MANUAL
-                and self.coordinator.data["manual_speed_selected"]
-            ):
-                await self.hass.async_add_executor_job(self.set_preset_mode, None)
+            # Do NOT call set_preset_mode(None) here.
+            # Resetting preset_mode to None makes it invalid per HA validation
+            # and raises "The default is invalid. Valid defaults are: …" (issue #147).
         else:
             await self.coordinator.api.power_on()
             if (
