@@ -26,7 +26,8 @@
           "port": "Port",
           "version": "Hardware version",
           "idnum": "Fan ID (only v2)",
-          "password": "Fan password (only v2)"
+          "password": "Fan password (only v2)",
+          "update_interval": "Update interval (seconds)"
         }
       },
       "reconfigure_confirm": {
@@ -36,7 +37,8 @@
           "port": "Port",
           "version": "Hardware version",
           "idnum": "Fan ID (only v2)",
-          "password": "Fan password (only v2)"
+          "password": "Fan password (only v2)",
+          "update_interval": "Update interval (seconds)"
         }
       }
     }

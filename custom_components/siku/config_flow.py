@@ -15,7 +15,15 @@ from homeassistant.helpers import config_validation as cv
 
 from .api_v1 import SikuV1Api
 from .api_v2 import SikuV2Api
-from .const import CONF_ID, CONF_VERSION, DEFAULT_PORT, DOMAIN, DEFAULT_NAME
+from .const import (
+    CONF_ID,
+    CONF_VERSION,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_PORT,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    DEFAULT_NAME,
+)
 
 USER_SCHEMA = vol.Schema(
     {
@@ -24,6 +32,9 @@ USER_SCHEMA = vol.Schema(
         vol.Required(CONF_VERSION, default=2): vol.In([1, 2]),
         vol.Optional(CONF_ID): cv.string,
         vol.Optional(CONF_PASSWORD): cv.string,
+        vol.Optional(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): vol.All(
+            vol.Coerce(int), vol.Range(min=5)
+        ),
     }
 )
 

@@ -8,7 +8,8 @@
           "port": "[%key:common::config_flow::data::port%]",
           "version": "[%key:common::config_flow::data::version%]",
           "idnum": "[%key:common::config_flow::data::idnum%]",
-          "password": "[%key:common::config_flow::data::password%]"
+          "password": "[%key:common::config_flow::data::password%]",
+          "update_interval": "[%key:common::config_flow::data::update_interval%]"
         }
       },
       "reconfigure_confirm": {
@@ -18,7 +19,8 @@
           "port": "[%key:common::config_flow::data::port%]",
           "version": "[%key:common::config_flow::data::version%]",
           "idnum": "[%key:common::config_flow::data::idnum%]",
-          "password": "[%key:common::config_flow::data::password%]"
+          "password": "[%key:common::config_flow::data::password%]",
+          "update_interval": "[%key:common::config_flow::data::update_interval%]"
         }
       }
     },
