@@ -26,7 +26,8 @@
           "port": "Port",
           "version": "Hardware version",
           "idnum": "Blæser ID (kun v2)",
-          "password": "Blæser kodeord (kun v2)"
+          "password": "Blæser kodeord (kun v2)",
+          "update_interval": "Opdateringsinterval (sekunder)"
         }
       },
       "reconfigure_confirm": {
@@ -36,7 +37,8 @@
           "port": "Port",
           "version": "Hardware version",
           "idnum": "Blæser ID (kun v2)",
-          "password": "Blæser kodeord (kun v2)"
+          "password": "Blæser kodeord (kun v2)",
+          "update_interval": "Opdateringsinterval (sekunder)"
         }
       }
     }

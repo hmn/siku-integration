@@ -7,6 +7,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD, CONF_PORT
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.siku.const import (
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     DEFAULT_PORT,
     DEFAULT_NAME,
@@ -223,3 +225,91 @@ async def test_reconfigure_updates_entry_and_migrates_unique_id(hass: HomeAssist
     assert updated_entry.data[CONF_IP_ADDRESS] == new_ip
     assert updated_entry.data[CONF_PORT] == new_port
     assert updated_entry.unique_id == f"{new_ip}:{new_port}"
+
+
+@pytest.mark.asyncio
+async def test_create_entry_with_custom_update_interval(hass: HomeAssistant):
+    """Test creating an entry stores the custom update interval."""
+    user_input = {
+        CONF_IP_ADDRESS: IP_ADDRESS,
+        CONF_PORT: PORT,
+        CONF_VERSION: 1,
+        CONF_UPDATE_INTERVAL: 60,
+    }
+    with patch("custom_components.siku.config_flow.SikuV1Api") as mock_api:
+        mock_api.return_value.status = AsyncMock(return_value=True)
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "user"}, data=user_input
+        )
+    assert result.get("type") == FlowResultType.CREATE_ENTRY
+    assert result.get("data")[CONF_UPDATE_INTERVAL] == 60
+
+
+@pytest.mark.asyncio
+async def test_create_entry_default_update_interval(hass: HomeAssistant):
+    """Test that the default update interval is stored when not specified."""
+    user_input = {
+        CONF_IP_ADDRESS: IP_ADDRESS,
+        CONF_PORT: PORT,
+        CONF_VERSION: 1,
+        CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+    }
+    with patch("custom_components.siku.config_flow.SikuV1Api") as mock_api:
+        mock_api.return_value.status = AsyncMock(return_value=True)
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "user"}, data=user_input
+        )
+    assert result.get("type") == FlowResultType.CREATE_ENTRY
+    assert result.get("data")[CONF_UPDATE_INTERVAL] == DEFAULT_UPDATE_INTERVAL
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_sets_default_interval_if_missing(hass: HomeAssistant):
+    """Test reconfigure with an existing entry missing update_interval uses default."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=f"{DEFAULT_NAME} {IP_ADDRESS}",
+        data={
+            CONF_IP_ADDRESS: IP_ADDRESS,
+            CONF_PORT: PORT,
+            CONF_VERSION: 1,
+            # CONF_UPDATE_INTERVAL intentionally absent (legacy config)
+        },
+        unique_id=f"{IP_ADDRESS}:{PORT}",
+    )
+    entry.add_to_hass(hass)
+
+    # The form should be pre-filled with the default interval as suggested value
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reconfigure", "entry_id": entry.entry_id},
+    )
+    assert result.get("type") == FlowResultType.FORM
+
+    schema = result.get("data_schema")
+    assert schema is not None
+    marker_to_suggested = {
+        marker.schema: (getattr(marker, "description", None) or {}).get(
+            "suggested_value"
+        )
+        for marker in schema.schema
+    }
+    # Legacy entry has no update_interval, so suggested value should be absent/None
+    assert marker_to_suggested.get(CONF_UPDATE_INTERVAL) is None
+
+    with patch("custom_components.siku.config_flow.SikuV1Api") as mock_api:
+        mock_api.return_value.status = AsyncMock(return_value=True)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_IP_ADDRESS: IP_ADDRESS,
+                CONF_PORT: PORT,
+                CONF_VERSION: 1,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+            },
+        )
+
+    assert result2.get("type") == FlowResultType.ABORT
+    updated_entry = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated_entry is not None
+    assert updated_entry.data[CONF_UPDATE_INTERVAL] == DEFAULT_UPDATE_INTERVAL

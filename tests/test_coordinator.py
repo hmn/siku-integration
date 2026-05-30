@@ -8,9 +8,11 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.siku.const import (
     CONF_ID,
+    CONF_UPDATE_INTERVAL,
     CONF_VERSION,
     DEFAULT_MODEL,
     DEFAULT_NAME,
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     DEFAULT_MANUFACTURER,
 )
@@ -104,3 +106,30 @@ async def test_update_method_failure(mock_v1api, mock_hass, config_entry_v1):
     with pytest.raises(UpdateFailed) as exc:
         await coordinator._update_method()
     assert "Timeout connecting to Siku (Blauberg) Fan" in str(exc.value)
+
+
+@patch("custom_components.siku.coordinator.SikuV1Api")
+def test_coordinator_uses_configured_update_interval(
+    mock_v1api, mock_hass, config_entry_v1
+):
+    """Test that the coordinator uses the update interval from config."""
+    config_entry_v1.data = {**config_entry_v1.data, CONF_UPDATE_INTERVAL: 120}
+    coordinator = SikuDataUpdateCoordinator(mock_hass, config_entry_v1)
+    from datetime import timedelta
+
+    assert coordinator.update_interval == timedelta(seconds=120)
+
+
+@patch("custom_components.siku.coordinator.SikuV1Api")
+def test_coordinator_defaults_update_interval_when_missing(
+    mock_v1api, mock_hass, config_entry_v1
+):
+    """Test that the coordinator falls back to the default interval for legacy configs."""
+    # Ensure CONF_UPDATE_INTERVAL is absent (simulates a legacy/existing config)
+    data = dict(config_entry_v1.data)
+    data.pop(CONF_UPDATE_INTERVAL, None)
+    config_entry_v1.data = data
+    coordinator = SikuDataUpdateCoordinator(mock_hass, config_entry_v1)
+    from datetime import timedelta
+
+    assert coordinator.update_interval == timedelta(seconds=DEFAULT_UPDATE_INTERVAL)

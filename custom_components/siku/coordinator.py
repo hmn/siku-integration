@@ -19,8 +19,10 @@ from .api_v1 import SikuV1Api
 from .api_v2 import SikuV2Api
 from .const import (
     CONF_ID,
+    CONF_UPDATE_INTERVAL,
     DEFAULT_MODEL,
     DEFAULT_NAME,
+    DEFAULT_UPDATE_INTERVAL,
 )
 from .const import CONF_VERSION
 from .const import DOMAIN
@@ -46,12 +48,15 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
                 entry.data[CONF_PASSWORD],
             )
         name = f"{DEFAULT_NAME} {entry.data[CONF_IP_ADDRESS]}"
+        update_interval_seconds = entry.data.get(
+            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+        )
 
         super().__init__(
             hass=hass,
             logger=LOGGER,
             name=name,
-            update_interval=timedelta(seconds=30),
+            update_interval=timedelta(seconds=update_interval_seconds),
             update_method=self._update_method,
         )
 
