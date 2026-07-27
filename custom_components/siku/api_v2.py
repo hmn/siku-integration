@@ -67,6 +67,17 @@ COMMAND_READ_FIRMWARE_VERSION = "86"
 COMMAND_FILTER_ALARM = "88"
 COMMAND_FAN_TYPE = "B9"
 
+# Supply and exhaust fan speed per speed mode, the intake/exhaust balance.
+# Manual speed mode drives both fans from one speed and ignores these.
+PRESET_SPEED_COMMANDS = {
+    "supply_speed_1": "3A",
+    "exhaust_speed_1": "3B",
+    "supply_speed_2": "3C",
+    "exhaust_speed_2": "3D",
+    "supply_speed_3": "3E",
+    "exhaust_speed_3": "3F",
+}
+
 COMMAND_FUNCTION_R = "01"
 COMMAND_FUNCTION_W = "02"
 COMMAND_FUNCTION_RW = "03"
@@ -90,6 +101,9 @@ EMPTY_VALUE = "00"
 
 SPEED_MANUAL_MIN: int = 0
 SPEED_MANUAL_MAX: int = 255
+
+SPEED_PRESET_MIN: int = 10
+SPEED_PRESET_MAX: int = 255
 
 
 class SikuV2Api:
@@ -132,6 +146,7 @@ class SikuV2Api:
             COMMAND_FILTER_TIMER,
             COMMAND_READ_ALARM,
             COMMAND_READ_FIRMWARE_VERSION,
+            *PRESET_SPEED_COMMANDS.values(),
         ]
         cmd = "".join(commands).upper()
         hexlist = await self._send_command(FUNC_READ, cmd)
@@ -169,6 +184,14 @@ class SikuV2Api:
             )
         )
         cmd = f"{COMMAND_SPEED}FF{COMMAND_MANUAL_SPEED}{speed:02X}".upper()
+        await self._send_command(FUNC_READ_WRITE, cmd)
+        return await self.status()
+
+    async def preset_speed(self, key: str, speed: int) -> dict:
+        """Set supply or exhaust fan speed for one of the 3 speed modes."""
+        if not SPEED_PRESET_MIN <= speed <= SPEED_PRESET_MAX:
+            raise ValueError(f"Invalid preset fan speed: {speed}")
+        cmd = f"{PRESET_SPEED_COMMANDS[key]}{speed:02X}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
@@ -456,8 +479,14 @@ class SikuV2Api:
             timer_countdown = int(seconds + minutes * 60 + hours * 60 * 60)
         except KeyError:
             timer_countdown = 0
+        preset_speeds = {
+            key: int(data[cmd], 16)
+            for key, cmd in PRESET_SPEED_COMMANDS.items()
+            if data.get(cmd)
+        }
         return {
             "is_on": is_on,
+            "preset_speeds": preset_speeds,
             "speed": speed,
             "speed_list": FAN_SPEEDS,
             "manual_speed_selected": bool(speed == "255"),

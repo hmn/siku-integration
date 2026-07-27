@@ -16,7 +16,12 @@ from .coordinator import SikuDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.FAN, Platform.SENSOR, Platform.BUTTON]
+PLATFORMS: list[Platform] = [
+    Platform.FAN,
+    Platform.SENSOR,
+    Platform.BUTTON,
+    Platform.NUMBER,
+]
 
 
 def _legacy_entity_unique_id_to_stable(
