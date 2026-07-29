@@ -3,7 +3,14 @@
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
-from custom_components.siku.api_v2 import SPEED_MANUAL_MAX, SPEED_MANUAL_MIN, SikuV2Api
+from custom_components.siku.api_v2 import (
+    PRESET_SPEED_COMMANDS,
+    SPEED_MANUAL_MAX,
+    SPEED_MANUAL_MIN,
+    SPEED_PRESET_MAX,
+    SPEED_PRESET_MIN,
+    SikuV2Api,
+)
 from custom_components.siku.const import (
     FAN_SPEEDS,
     DIRECTIONS,
@@ -557,3 +564,54 @@ async def test_filter_timer_parse_size5_max(api):
     assert (await api._translate_response(data))[
         "filter_timer_minutes"
     ] == 181 * 24 * 60 + 23 * 60 + 59
+
+
+# --- supply/exhaust fan speeds (the intake/exhaust balance) -----------------
+
+
+@pytest.mark.asyncio
+async def test_preset_speed(api):
+    """The parameter byte is followed by the speed as hex."""
+    with (
+        patch.object(api, "_send_command", new=AsyncMock()) as mock_send,
+        patch.object(
+            api,
+            "status",
+            new=AsyncMock(return_value={"preset_speeds": {"exhaust_speed_1": 39}}),
+        ),
+    ):
+        result = await api.preset_speed("exhaust_speed_1", 39)
+
+        assert mock_send.call_args[0][1] == "3B27"
+        assert result["preset_speeds"]["exhaust_speed_1"] == 39
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("speed", [SPEED_PRESET_MIN - 1, SPEED_PRESET_MAX + 1])
+async def test_preset_speed_out_of_range(api, speed):
+    with (
+        patch.object(api, "_send_command", new=AsyncMock()),
+        pytest.raises(ValueError),
+    ):
+        await api.preset_speed("supply_speed_1", speed)
+
+
+@pytest.mark.asyncio
+async def test_status_reads_preset_speeds(api):
+    with (
+        patch.object(api, "_send_command", new=AsyncMock()) as mock_send,
+        patch.object(api, "_parse_response", new=AsyncMock(return_value={})),
+    ):
+        await api.status()
+
+        for command in PRESET_SPEED_COMMANDS.values():
+            assert command in mock_send.call_args[0][1]
+
+
+@pytest.mark.asyncio
+async def test_preset_speeds_translate(api):
+    """Parameters the fan did not answer are left out."""
+    result = await api._translate_response({"3A": "33", "3B": "27"})
+
+    assert result["preset_speeds"] == {"supply_speed_1": 51, "exhaust_speed_1": 39}
+    assert (await api._translate_response({}))["preset_speeds"] == {}
