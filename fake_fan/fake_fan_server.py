@@ -229,33 +229,33 @@ class FakeFanController:
             return ("01" if self.passive_boost_enabled else "00", False)
         elif full_cmd == COMMAND_PASSIVE_VENT_MODE:
             return ("01" if self.passive_ventilation_mode else "00", False)
-        elif command == COMMAND_ON_OFF:
+        elif low_cmd == COMMAND_ON_OFF:
             return (POWER_ON if self.is_on else POWER_OFF, False)
-        elif command == COMMAND_SPEED:
+        elif low_cmd == COMMAND_SPEED:
             return (self.speed, False)
-        elif command == COMMAND_MANUAL_SPEED:
+        elif low_cmd == COMMAND_MANUAL_SPEED:
             return (self.manual_speed, False)
-        elif command == COMMAND_DIRECTION:
+        elif low_cmd == COMMAND_DIRECTION:
             return (self.direction, False)
-        elif command == COMMAND_BOOST:
+        elif low_cmd == COMMAND_BOOST:
             return ("01" if self.boost else "00", False)
-        elif command == COMMAND_MODE:
+        elif low_cmd == COMMAND_MODE:
             return (self.mode, False)
-        elif command == COMMAND_CURRENT_HUMIDITY:
+        elif low_cmd == COMMAND_CURRENT_HUMIDITY:
             return (f"{self.humidity:02X}", False)
-        elif command in (COMMAND_FAN1RPM, COMMAND_FAN2RPM):
+        elif low_cmd in (COMMAND_FAN1RPM, COMMAND_FAN2RPM):
             # RPM can be larger than 255, so use multi-byte for values > 255
             if self.rpm > 255:
                 # Multi-byte value: size + command + data (2 bytes for RPM, little-endian)
                 return (
-                    f"02{command}{(self.rpm & 0xFF):02X}{(self.rpm >> 8):02X}",
+                    f"02{low_cmd}{(self.rpm & 0xFF):02X}{(self.rpm >> 8):02X}",
                     True,
                 )
             else:
                 return (f"{self.rpm:02X}", False)
-        elif command == COMMAND_BOOST_DELAY:
+        elif low_cmd == COMMAND_BOOST_DELAY:
             return (f"{self.boost_delay_minutes:02X}", False)
-        elif command == COMMAND_FILTER_TIMER:
+        elif low_cmd == COMMAND_FILTER_TIMER:
             # On-wire byte order matches real device: [minutes, hours, days].
             # _parse_response reverses bytes, so after reversal data["64"] = "DDHHMM".
             # _translate_response then reads days/hours/minutes using negative indexing.
@@ -264,8 +264,8 @@ class FakeFanController:
             hours = remaining // 60
             minutes = remaining % 60
             # Multi-byte value: FE + size + command + data
-            return (f"03{command}{minutes:02X}{hours:02X}{days:02X}", True)
-        elif command == COMMAND_TIMER_COUNTDOWN:
+            return (f"03{low_cmd}{minutes:02X}{hours:02X}{days:02X}", True)
+        elif low_cmd == COMMAND_TIMER_COUNTDOWN:
             # Spec: Byte1=seconds, Byte2=minutes, Byte3=hours.
             # _parse_response reverses bytes, so after reversal data["0B"] = "HHMMSS".
             # _translate_response reads [0:2]=hours, [2:4]=minutes, [4:6]=seconds.
@@ -274,19 +274,19 @@ class FakeFanController:
             minutes = remaining // 60
             seconds = remaining % 60
             # Multi-byte value: FE + size + command + data
-            return (f"03{command}{seconds:02X}{minutes:02X}{hours:02X}", True)
-        elif command == COMMAND_READ_ALARM:
+            return (f"03{low_cmd}{seconds:02X}{minutes:02X}{hours:02X}", True)
+        elif low_cmd == COMMAND_READ_ALARM:
             return ("01" if self.alarm else "00", False)
-        elif command == COMMAND_READ_FIRMWARE_VERSION:
+        elif low_cmd == COMMAND_READ_FIRMWARE_VERSION:
             # Return firmware version as multi-byte value
             now = datetime.now()
             value = (
-                f"06{command}{self.firmware_major:02X}"
+                f"06{low_cmd}{self.firmware_major:02X}"
                 f"{self.firmware_minor:02X}{now.day:02X}{now.month:02X}"
                 f"{(now.year >> 8):02X}{(now.year & 0xFF):02X}"
             )
             return (value, True)
-        elif command == COMMAND_DEVICE_TYPE:
+        elif low_cmd == COMMAND_DEVICE_TYPE:
             return (self.device_type, False)
         else:
             LOGGER.warning(f"Unknown command: {full_cmd}")

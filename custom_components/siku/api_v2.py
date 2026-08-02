@@ -411,40 +411,41 @@ class SikuV2Api:
         LOGGER.debug("translate response: %s", data)
         try:
             is_on = bool(data[COMMAND_ON_OFF] == POWER_ON)
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             is_on = False
         try:
             speed = f"{int(data[COMMAND_SPEED], 16):02}"
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             speed = "255"
         try:
             manual_speed = f"{int(data[COMMAND_MANUAL_SPEED], 16):02}"
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             manual_speed = "00"
         try:
             direction = DIRECTIONS[data[COMMAND_DIRECTION]]
             oscillating = bool(direction == DIRECTION_ALTERNATING)
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             direction = None
             oscillating = True
         try:
-            boost = bool(data[COMMAND_BOOST] != "00")
-        except KeyError:
+            boost_raw = data[COMMAND_BOOST]
+            boost = bool(boost_raw and boost_raw != "00")
+        except (KeyError, ValueError, TypeError):
             boost = False
         try:
             mode = MODES[data[COMMAND_MODE]]
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             mode = PRESET_MODE_AUTO
         try:
             humidity = int(data[COMMAND_CURRENT_HUMIDITY], 16)
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             humidity = None
         try:
             rpm = int(data[COMMAND_FAN1RPM], 16)
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             try:
                 rpm = int(data[COMMAND_FAN2RPM], 16)
-            except KeyError:
+            except (KeyError, ValueError, TypeError):
                 rpm = 0
         try:
             raw = data[COMMAND_FILTER_TIMER]
@@ -459,11 +460,12 @@ class SikuV2Api:
             hours = int(raw[-4:-2], 16)
             days = int(raw[-6:-4], 16)
             filter_timer = int(days * 24 * 60 + hours * 60 + minutes)
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             filter_timer = 0
         try:
-            alarm = bool(data[COMMAND_READ_ALARM] != "00")
-        except KeyError:
+            alarm_raw = data[COMMAND_READ_ALARM]
+            alarm = bool(alarm_raw and alarm_raw != "00")
+        except (KeyError, ValueError, TypeError):
             alarm = False
         try:
             # Byte 1: Firmware-Version (major)
@@ -472,7 +474,7 @@ class SikuV2Api:
             # Byte 4: Month
             # Byte 5 and 6: Year
             firmware = f"{int(data[COMMAND_READ_FIRMWARE_VERSION][0], 16)}.{int(data[COMMAND_READ_FIRMWARE_VERSION][1], 16)}"
-        except KeyError:
+        except (KeyError, ValueError, TypeError, IndexError):
             firmware = None
         try:
             # Byte 1 – seconds (0…59)
@@ -482,7 +484,7 @@ class SikuV2Api:
             minutes = int(data[COMMAND_TIMER_COUNTDOWN][2:4], 16)
             seconds = int(data[COMMAND_TIMER_COUNTDOWN][4:6], 16)
             timer_countdown = int(seconds + minutes * 60 + hours * 60 * 60)
-        except KeyError:
+        except (KeyError, ValueError, TypeError):
             timer_countdown = 0
         preset_speeds = {
             key: int(data[cmd], 16)

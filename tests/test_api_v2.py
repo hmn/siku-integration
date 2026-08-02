@@ -710,3 +710,42 @@ async def test_parse_translate_app_traffic_replay_issue_171(api):
     assert translated["rpm"] == 900
     assert translated["timer_countdown"] == 0
     assert translated["alarm"] is False
+
+
+@pytest.mark.asyncio
+async def test_translate_response_handles_unsupported_empty_values(api):
+    """Unsupported parameters (FD xx) are parsed as empty strings and must not crash."""
+    data = {
+        "B9": "",
+        "01": "",
+        "02": "",
+        "44": "",
+        "B7": "",
+        "06": "",
+        "07": "",
+        "0B": "",
+        "25": "",
+        "4A": "",
+        "4B": "",
+        "64": "",
+        "83": "",
+        "86": "",
+        "3A": "",
+        "3B": "",
+        "3C": "",
+        "3D": "",
+        "3E": "",
+        "3F": "",
+    }
+
+    translated = await api._translate_response(data)
+
+    assert translated["is_on"] is False
+    assert translated["speed"] == "255"
+    assert translated["manual_speed"] == 0
+    assert translated["boost"] is False
+    assert translated["mode"] == "auto"
+    assert translated["humidity"] is None
+    assert translated["rpm"] == 0
+    assert translated["filter_timer_minutes"] == 0
+    assert translated["alarm"] is False

@@ -78,3 +78,28 @@ def test_fake_fan_supports_high_byte_read_write_requests():
     # Verify checksum in generated response
     response_hexlist = _hexlist(response)
     assert fan._verify_checksum(response_hexlist) is True
+
+
+def test_fake_fan_legacy_read_returns_values_not_only_unsupported():
+    fan = FakeFanController("1234567890123456", "1234")
+
+    request = _build_request(
+        fan,
+        FUNC_READ,
+        "B9010244B706070B254A4B6483863A3B3C3D3E3F",
+        device_id="1234567890123456",
+        password="1234",
+    )
+
+    response = fan.process_packet(request)
+
+    assert response is not None
+    response_hex = response.hex().upper()
+
+    # Should contain at least some normal cmd/value pairs.
+    assert "B9" in response_hex
+    assert "01" in response_hex
+    assert "02" in response_hex
+
+    # Should not be a full stream of FD <cmd> unsupported markers.
+    assert "FDB9FD01FD02" not in response_hex
