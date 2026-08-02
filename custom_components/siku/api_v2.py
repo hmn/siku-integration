@@ -49,6 +49,7 @@ COMMAND_TIMER_COUNTDOWN = "0B"
 COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
 COMMAND_FAN1RPM = "4A"
+COMMAND_FAN2RPM = "4B"
 # Byte 1: Minutes (0...59)
 # Byte 2: Hours (0...23)
 # Byte 3: Days (0...181)
@@ -143,6 +144,7 @@ class SikuV2Api:
             COMMAND_TIMER_COUNTDOWN,
             COMMAND_CURRENT_HUMIDITY,
             COMMAND_FAN1RPM,
+            COMMAND_FAN2RPM,
             COMMAND_FILTER_TIMER,
             COMMAND_READ_ALARM,
             COMMAND_READ_FIRMWARE_VERSION,
@@ -440,7 +442,10 @@ class SikuV2Api:
         try:
             rpm = int(data[COMMAND_FAN1RPM], 16)
         except KeyError:
-            rpm = 0
+            try:
+                rpm = int(data[COMMAND_FAN2RPM], 16)
+            except KeyError:
+                rpm = 0
         try:
             raw = data[COMMAND_FILTER_TIMER]
             LOGGER.debug("FILTER_TIMER raw: %s", raw)
@@ -514,6 +519,7 @@ class SikuV2Api:
         data = {}
         try:
             start = 0
+            page = "00"
 
             # prefix
             LOGGER.debug("start: %s", start)
@@ -584,45 +590,65 @@ class SikuV2Api:
             while i < (len(hexlist) - 2):
                 LOGGER.debug("parse data %s : %s", i, hexlist[i])
                 parameter = hexlist[i]
-                value_size = 1
                 cmd = ""
                 value = ""
+
                 if parameter == RETURN_CHANGE_FUNC:
+                    # Mixed operations can appear in one response; not needed for
+                    # value decoding, so skip and continue.
+                    i += 1
                     LOGGER.debug(
-                        "special function, change base function not implemented %s",
-                        parameter,
+                        "special function, change base function to %s", hexlist[i]
                     )
-                    raise NotImplementedError(
-                        f"special function, change base function not implemented {parameter}"
-                    )
+                    i += 1
+                    continue
+
                 if parameter == RETURN_HIGH_BYTE:
-                    LOGGER.debug(
-                        "special function, high byte not implemented %s", parameter
-                    )
-                    raise NotImplementedError(
-                        f"special function, high byte not implemented {parameter}"
-                    )
+                    i += 1
+                    page = hexlist[i]
+                    LOGGER.debug("special function, high byte page set to %s", page)
+                    i += 1
+                    continue
+
                 if parameter == RETURN_INVALID:
                     i += 1
                     cmd = hexlist[i]
+                    if page != "00":
+                        cmd = f"{page}{cmd}"
                     LOGGER.debug("special function, invalid cmd:%s", cmd)
-                elif parameter == RETURN_VALUE_SIZE:
+                    data.update({cmd: ""})
+                    i += 1
+                    continue
+
+                if parameter == RETURN_VALUE_SIZE:
                     i += 1
                     value_size = int(hexlist[i], 16)
                     LOGGER.debug("special function, value size %s", value_size)
                     i += 1
                     cmd = hexlist[i]
+                    if page != "00":
+                        cmd = f"{page}{cmd}"
+
                     value = "".join(hexlist[i + 1 : i + 1 + value_size])
                     # reverse byte order
                     value = "".join(
                         [value[idx : idx + 2] for idx in range(0, len(value), 2)][::-1]
                     )
-                    i += value_size
-                else:
-                    cmd = parameter
-                    i += 1
-                    value = hexlist[i]
-                    LOGGER.debug("normal function, cmd:%s value:%s", cmd, value)
+                    data.update({cmd: value})
+                    LOGGER.debug(
+                        "return data cmd:%s value:%s",
+                        cmd,
+                        value,
+                    )
+                    i += 1 + value_size
+                    continue
+
+                cmd = parameter
+                if page != "00":
+                    cmd = f"{page}{cmd}"
+                i += 1
+                value = hexlist[i]
+                LOGGER.debug("normal function, cmd:%s value:%s", cmd, value)
 
                 data.update({cmd: value})
                 LOGGER.debug(
@@ -631,6 +657,10 @@ class SikuV2Api:
                     value,
                 )
                 i += 1
+        except IndexError as ex:
+            raise ValueError(
+                f"Error translating response from fan controller: {str(ex)}"
+            ) from ex
         except KeyError as ex:
             raise ValueError(
                 f"Error translating response from fan controller: {str(ex)}"

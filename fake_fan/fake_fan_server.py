@@ -44,7 +44,9 @@ COMMAND_TIMER_COUNTDOWN = "0B"
 COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
 COMMAND_FAN1RPM = "4A"
+COMMAND_FAN2RPM = "4B"
 COMMAND_FILTER_TIMER = "64"
+COMMAND_BOOST_DELAY = "66"
 COMMAND_RESET_FILTER_TIMER = "65"
 COMMAND_SEARCH = "7C"
 COMMAND_RUN_HOURS = "7E"
@@ -54,6 +56,14 @@ COMMAND_READ_FIRMWARE_VERSION = "86"
 COMMAND_FILTER_ALARM = "88"
 COMMAND_DIRECTION = "B7"
 COMMAND_DEVICE_TYPE = "B9"
+
+COMMAND_RESTORE_PRESET_SPEEDS = "012A"
+COMMAND_S8_POWER = "0310"
+COMMAND_S8_SPEED = "0311"
+COMMAND_S8_MODE = "0312"
+COMMAND_S8_BOOST = "0320"
+COMMAND_ENABLE_BOOST_PASSIVE = "032A"
+COMMAND_PASSIVE_VENT_MODE = "032B"
 
 POWER_OFF = "00"
 POWER_ON = "01"
@@ -92,6 +102,9 @@ class FakeFanController:
             3 * 24 * 60 + 2 * 60 + 1
         )  # Minutes since filter change ( 3 days 2 hours 1 minute = 4441)
         self.timer_countdown_seconds = 0  # Countdown timer in seconds
+        self.boost_delay_minutes = 0
+        self.passive_boost_enabled = False
+        self.passive_ventilation_mode = False
         self.alarm = False
         self.firmware_major = 2
         self.firmware_minor = 5
@@ -164,6 +177,36 @@ class FakeFanController:
         )
         return header
 
+    def _full_command(self, command: str, page: str = "00") -> str:
+        """Return command as a full 16-bit hex string."""
+        if len(command) == 4:
+            return command.upper()
+        return f"{page}{command}".upper()
+
+    def _split_command(self, command: str) -> tuple[str, str]:
+        """Split full 16-bit command into (page, low byte)."""
+        full = self._full_command(command)
+        return full[:2], full[2:]
+
+    def _encode_data_entry(
+        self, current_page: str, full_cmd: str, value: str, is_multibyte: bool
+    ) -> tuple[str, str]:
+        """Encode one response data entry, adding page change marker when needed."""
+        page, cmd = self._split_command(full_cmd)
+        encoded = ""
+        if page != current_page:
+            encoded += RETURN_HIGH_BYTE + page
+            current_page = page
+
+        if is_multibyte:
+            encoded += RETURN_VALUE_SIZE + value
+        elif value.startswith(RETURN_INVALID):
+            encoded += RETURN_INVALID + cmd
+        else:
+            encoded += cmd + value
+
+        return encoded, current_page
+
     def _get_state_value(self, command: str) -> tuple[str, bool]:
         """Get current state value for a command.
 
@@ -171,7 +214,22 @@ class FakeFanController:
             tuple: (value_string, is_multibyte)
 
         """
-        if command == COMMAND_ON_OFF:
+        full_cmd = self._full_command(command)
+        low_cmd = full_cmd[2:]
+
+        if full_cmd in (COMMAND_S8_POWER,):
+            return (POWER_ON if self.is_on else POWER_OFF, False)
+        elif full_cmd in (COMMAND_S8_SPEED,):
+            return (self.speed, False)
+        elif full_cmd in (COMMAND_S8_MODE,):
+            return (self.mode, False)
+        elif full_cmd in (COMMAND_S8_BOOST,):
+            return ("01" if self.boost else "00", False)
+        elif full_cmd == COMMAND_ENABLE_BOOST_PASSIVE:
+            return ("01" if self.passive_boost_enabled else "00", False)
+        elif full_cmd == COMMAND_PASSIVE_VENT_MODE:
+            return ("01" if self.passive_ventilation_mode else "00", False)
+        elif command == COMMAND_ON_OFF:
             return (POWER_ON if self.is_on else POWER_OFF, False)
         elif command == COMMAND_SPEED:
             return (self.speed, False)
@@ -185,16 +243,18 @@ class FakeFanController:
             return (self.mode, False)
         elif command == COMMAND_CURRENT_HUMIDITY:
             return (f"{self.humidity:02X}", False)
-        elif command == COMMAND_FAN1RPM:
+        elif command in (COMMAND_FAN1RPM, COMMAND_FAN2RPM):
             # RPM can be larger than 255, so use multi-byte for values > 255
             if self.rpm > 255:
-                # Multi-byte value: size + command + data (2 bytes for RPM, big-endian)
+                # Multi-byte value: size + command + data (2 bytes for RPM, little-endian)
                 return (
-                    f"02{command}{(self.rpm >> 8):02X}{(self.rpm & 0xFF):02X}",
+                    f"02{command}{(self.rpm & 0xFF):02X}{(self.rpm >> 8):02X}",
                     True,
                 )
             else:
                 return (f"{self.rpm:02X}", False)
+        elif command == COMMAND_BOOST_DELAY:
+            return (f"{self.boost_delay_minutes:02X}", False)
         elif command == COMMAND_FILTER_TIMER:
             # On-wire byte order matches real device: [minutes, hours, days].
             # _parse_response reverses bytes, so after reversal data["64"] = "DDHHMM".
@@ -229,12 +289,37 @@ class FakeFanController:
         elif command == COMMAND_DEVICE_TYPE:
             return (self.device_type, False)
         else:
-            LOGGER.warning(f"Unknown command: {command}")
-            return (RETURN_INVALID + command, False)
+            LOGGER.warning(f"Unknown command: {full_cmd}")
+            return (RETURN_INVALID + low_cmd, False)
 
     def _set_state_value(self, command: str, value: str):
         """Set state value for a command."""
-        if command == COMMAND_ON_OFF:
+        full_cmd = self._full_command(command)
+        low_cmd = full_cmd[2:]
+
+        if full_cmd == COMMAND_RESTORE_PRESET_SPEEDS:
+            LOGGER.info("✓ Restore preset speed defaults requested")
+            return
+        elif full_cmd == COMMAND_ENABLE_BOOST_PASSIVE:
+            self.passive_boost_enabled = value != "00"
+            LOGGER.info(
+                "✓ Passive ventilation boost %s",
+                "enabled" if self.passive_boost_enabled else "disabled",
+            )
+            return
+        elif full_cmd == COMMAND_PASSIVE_VENT_MODE:
+            self.passive_ventilation_mode = value != "00"
+            LOGGER.info(
+                "✓ Passive ventilation mode %s",
+                "enabled" if self.passive_ventilation_mode else "disabled",
+            )
+            return
+        elif low_cmd == COMMAND_BOOST_DELAY:
+            self.boost_delay_minutes = int(value, 16)
+            LOGGER.info("✓ Boost delay set to: %s minutes", self.boost_delay_minutes)
+            return
+
+        if low_cmd == COMMAND_ON_OFF:
             if value == POWER_ON:
                 self.is_on = True
                 LOGGER.info("✓ Fan turned ON")
@@ -244,14 +329,14 @@ class FakeFanController:
             elif value == POWER_TOGGLE:
                 self.is_on = not self.is_on
                 LOGGER.info(f"✓ Fan toggled to {'ON' if self.is_on else 'OFF'}")
-        elif command == COMMAND_SPEED:
+        elif low_cmd == COMMAND_SPEED:
             self.speed = value
             LOGGER.info(f"✓ Speed set to: {int(value, 16)}")
-        elif command == COMMAND_MANUAL_SPEED:
+        elif low_cmd == COMMAND_MANUAL_SPEED:
             self.manual_speed = value
             percentage = (int(value, 16) / 255.0) * 100
             LOGGER.info(f"✓ Manual speed set to: {int(value, 16)} ({percentage:.1f}%)")
-        elif command == COMMAND_DIRECTION:
+        elif low_cmd == COMMAND_DIRECTION:
             self.direction = value
             direction_names = {
                 "00": "Forward (ventilation)",
@@ -259,33 +344,76 @@ class FakeFanController:
                 "02": "Reverse (supply)",
             }
             LOGGER.info(f"✓ Direction set to: {direction_names.get(value, value)}")
-        elif command == COMMAND_BOOST:
+        elif low_cmd == COMMAND_BOOST:
             self.boost = value != "00"
             LOGGER.info(f"✓ Boost {'enabled' if self.boost else 'disabled'}")
-        elif command == COMMAND_MODE:
+        elif low_cmd == COMMAND_MODE:
             self.mode = value
             mode_names = {"01": "Sleep", "02": "Party"}
             LOGGER.info(f"✓ Mode set to: {mode_names.get(value, value)}")
-        elif command == COMMAND_RESET_FILTER_TIMER:
+        elif low_cmd == COMMAND_RESET_FILTER_TIMER:
             self.filter_timer_minutes = 0
             LOGGER.info("✓ Filter timer reset")
-        elif command == COMMAND_RESET_ALARMS:
+        elif low_cmd == COMMAND_RESET_ALARMS:
             self.alarm = False
             LOGGER.info("✓ Alarms reset")
         else:
-            LOGGER.warning(f"Unknown write command: {command} = {value}")
+            LOGGER.warning(f"Unknown write command: {full_cmd} = {value}")
+
+    def _parse_data_commands(self, hexlist, data_start, data_end, expect_values: bool):
+        """Parse request DATA block with support for page/size special commands."""
+        parsed: list[tuple[str, str | None]] = []
+        i = data_start
+        page = "00"
+
+        while i < data_end:
+            token = hexlist[i]
+
+            if token == RETURN_CHANGE_FUNC:
+                i += 2
+                continue
+
+            if token == RETURN_HIGH_BYTE:
+                page = hexlist[i + 1]
+                i += 2
+                continue
+
+            if token == RETURN_VALUE_SIZE:
+                value_size = int(hexlist[i + 1], 16)
+                cmd = self._full_command(hexlist[i + 2], page)
+                if expect_values:
+                    value = "".join(hexlist[i + 3 : i + 3 + value_size])
+                    parsed.append((cmd, value))
+                else:
+                    parsed.append((cmd, None))
+                i += 3 + value_size
+                continue
+
+            cmd = self._full_command(token, page)
+            if expect_values:
+                if i + 1 >= data_end:
+                    break
+                parsed.append((cmd, hexlist[i + 1]))
+                i += 2
+            else:
+                parsed.append((cmd, None))
+                i += 1
+
+        return parsed
 
     def _handle_read(self, hexlist, data_start, data_end):
         response_data = ""
-        i = data_start
-        while i < data_end:
-            cmd = hexlist[i]
-            value, is_multibyte = self._get_state_value(cmd)
-            if is_multibyte:
-                response_data += RETURN_VALUE_SIZE + value
-            else:
-                response_data += cmd + value
-            i += 1
+        current_page = "00"
+
+        for full_cmd, _ in self._parse_data_commands(
+            hexlist, data_start, data_end, expect_values=False
+        ):
+            value, is_multibyte = self._get_state_value(full_cmd)
+            encoded, current_page = self._encode_data_entry(
+                current_page, full_cmd, value, is_multibyte
+            )
+            response_data += encoded
+
         response = self._build_response_header() + response_data
         LOGGER.debug(f"Response before checksum: {response}")
         LOGGER.debug(f"Response data: {response_data}")
@@ -297,34 +425,39 @@ class FakeFanController:
         return response_bytes
 
     def _handle_write(self, hexlist, data_start, data_end):
-        i = data_start
-        while i < data_end:
-            cmd = hexlist[i]
-            if i + 1 < data_end:
-                value = hexlist[i + 1]
-                self._set_state_value(cmd, value)
-                i += 2
-            else:
-                i += 1
+        for full_cmd, raw_value in self._parse_data_commands(
+            hexlist, data_start, data_end, expect_values=True
+        ):
+            if raw_value is None:
+                continue
+
+            # For single-byte values this is already one byte. For multi-byte
+            # values (on-wire little-endian), use the least significant byte in
+            # this simulator unless command-specific handling is needed.
+            value = raw_value[:2]
+            self._set_state_value(full_cmd, value)
+
         LOGGER.info("(No response for WRITE command)")
         return None
 
     def _handle_read_write(self, hexlist, data_start, data_end):
         response_data = ""
-        i = data_start
-        while i < data_end:
-            cmd = hexlist[i]
-            if i + 1 < data_end:
-                value = hexlist[i + 1]
-                self._set_state_value(cmd, value)
-                new_value, is_multibyte = self._get_state_value(cmd)
-                if is_multibyte:
-                    response_data += RETURN_VALUE_SIZE + new_value
-                else:
-                    response_data += cmd + new_value
-                i += 2
-            else:
-                i += 1
+        current_page = "00"
+
+        for full_cmd, raw_value in self._parse_data_commands(
+            hexlist, data_start, data_end, expect_values=True
+        ):
+            if raw_value is None:
+                continue
+
+            value = raw_value[:2]
+            self._set_state_value(full_cmd, value)
+            new_value, is_multibyte = self._get_state_value(full_cmd)
+            encoded, current_page = self._encode_data_entry(
+                current_page, full_cmd, new_value, is_multibyte
+            )
+            response_data += encoded
+
         response = self._build_response_header() + response_data
         response += self._checksum(response)
         response_bytes = bytes.fromhex(response)

@@ -615,3 +615,98 @@ async def test_preset_speeds_translate(api):
 
     assert result["preset_speeds"] == {"supply_speed_1": 51, "exhaust_speed_1": 39}
     assert (await api._translate_response({}))["preset_speeds"] == {}
+
+
+@pytest.mark.asyncio
+async def test_parse_response_supports_high_byte_page_switch(api):
+    """The parser should support 0xFF high-byte commands used by newer app traffic."""
+    hexlist = _HEADER + ["FF", "03", "10", "01", "11", "02", "20", "00"] + _CHECKSUM
+
+    data = await api._parse_response(hexlist)
+
+    assert data["0310"] == "01"
+    assert data["0311"] == "02"
+    assert data["0320"] == "00"
+
+
+@pytest.mark.asyncio
+async def test_parse_response_supports_change_func_special_command(api):
+    """The parser should skip 0xFC function-change markers instead of failing."""
+    hexlist = _HEADER + ["FC", "01", "01", "01"] + _CHECKSUM
+
+    data = await api._parse_response(hexlist)
+
+    assert data["01"] == "01"
+
+
+@pytest.mark.asyncio
+async def test_translate_response_uses_fan2_rpm_fallback(api):
+    """If 0x4A is absent, use 0x4B for RPM."""
+    result = await api._translate_response({"4B": "84"})
+    assert result["rpm"] == 132
+
+
+@pytest.mark.asyncio
+async def test_parse_translate_app_traffic_replay_issue_171(api):
+    """Replay-style packet with app-like ordering and page-3 parameters.
+
+    Mirrors the DUKA S8 traffic pattern from issue #171 where the payload contains:
+    - base-page fields (06/07/0B/25/4B/66/83/B9)
+    - FF 03 page switch followed by low bytes 12/20/11/10
+    """
+    hexlist = (
+        _HEADER
+        + [
+            "06",
+            "00",  # boost off
+            "07",
+            "00",  # mode off/auto fallback
+            "FE",
+            "03",
+            "0B",
+            "00",
+            "00",
+            "00",  # timer countdown (sec/min/hour on wire)
+            "25",
+            "33",  # humidity=51
+            "FE",
+            "02",
+            "4B",
+            "84",
+            "03",  # fan2 rpm=900 (little-endian on wire)
+            "66",
+            "05",  # boost delay (not translated yet)
+            "83",
+            "00",  # no alarm
+            "B9",
+            "03",  # unit type
+            "FF",
+            "03",  # high-byte page switch
+            "12",
+            "01",
+            "20",
+            "00",
+            "11",
+            "02",
+            "10",
+            "01",
+        ]
+        + _CHECKSUM
+    )
+
+    data = await api._parse_response(hexlist)
+    translated = await api._translate_response(data)
+
+    # page-3 commands are retained with full 16-bit command ids
+    assert data["0312"] == "01"
+    assert data["0320"] == "00"
+    assert data["0311"] == "02"
+    assert data["0310"] == "01"
+
+    # v2 translation remains backwards compatible while accepting this payload
+    assert translated["boost"] is False
+    assert translated["mode"] == "auto"
+    assert translated["humidity"] == 51
+    assert translated["rpm"] == 900
+    assert translated["timer_countdown"] == 0
+    assert translated["alarm"] is False
