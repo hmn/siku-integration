@@ -45,6 +45,7 @@ COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
 COMMAND_FAN1RPM = "4A"
 COMMAND_FAN2RPM = "4B"
+COMMAND_FILTER_REPLACEMENT_TIMER_SETUP = "63"
 COMMAND_FILTER_TIMER = "64"
 COMMAND_BOOST_DELAY = "66"
 COMMAND_RESET_FILTER_TIMER = "65"
@@ -98,6 +99,7 @@ class FakeFanController:
         self.mode = MODE_OFF  # 01=sleep, 02=party
         self.humidity = 45  # Current humidity percentage
         self.rpm = 1200  # Fan RPM
+        self.filter_replacement_timer_setup_days = 120  # Param 0x63, 70..365 days
         self.filter_timer_minutes = (
             3 * 24 * 60 + 2 * 60 + 1
         )  # Minutes since filter change ( 3 days 2 hours 1 minute = 4441)
@@ -255,6 +257,10 @@ class FakeFanController:
                 return (f"{self.rpm:02X}", False)
         elif low_cmd == COMMAND_BOOST_DELAY:
             return (f"{self.boost_delay_minutes:02X}", False)
+        elif low_cmd == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
+            # Param 0x63 is 2 bytes (little-endian on wire): [lo, hi].
+            days = self.filter_replacement_timer_setup_days
+            return (f"02{low_cmd}{days & 0xFF:02X}{(days >> 8) & 0xFF:02X}", True)
         elif low_cmd == COMMAND_FILTER_TIMER:
             # On-wire byte order matches real device: [minutes, hours, days].
             # _parse_response reverses bytes, so after reversal data["64"] = "DDHHMM".
@@ -317,6 +323,20 @@ class FakeFanController:
         elif low_cmd == COMMAND_BOOST_DELAY:
             self.boost_delay_minutes = int(value, 16)
             LOGGER.info("✓ Boost delay set to: %s minutes", self.boost_delay_minutes)
+            return
+        elif low_cmd == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
+            # Write uses 2-byte little-endian value when sent via FE size command.
+            # Fallback to one-byte value if legacy payload is used.
+            if len(value) >= 4:
+                self.filter_replacement_timer_setup_days = int(
+                    value[2:4] + value[0:2], 16
+                )
+            else:
+                self.filter_replacement_timer_setup_days = int(value, 16)
+            LOGGER.info(
+                "✓ Filter replacement timer setup set to: %s days",
+                self.filter_replacement_timer_setup_days,
+            )
             return
 
         if low_cmd == COMMAND_ON_OFF:
@@ -434,7 +454,10 @@ class FakeFanController:
             # For single-byte values this is already one byte. For multi-byte
             # values (on-wire little-endian), use the least significant byte in
             # this simulator unless command-specific handling is needed.
-            value = raw_value[:2]
+            if full_cmd[2:] == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
+                value = raw_value
+            else:
+                value = raw_value[:2]
             self._set_state_value(full_cmd, value)
 
         LOGGER.info("(No response for WRITE command)")
@@ -450,7 +473,10 @@ class FakeFanController:
             if raw_value is None:
                 continue
 
-            value = raw_value[:2]
+            if full_cmd[2:] == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
+                value = raw_value
+            else:
+                value = raw_value[:2]
             self._set_state_value(full_cmd, value)
             new_value, is_multibyte = self._get_state_value(full_cmd)
             encoded, current_page = self._encode_data_entry(

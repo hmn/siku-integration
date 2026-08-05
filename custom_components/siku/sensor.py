@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     EntityCategory,
     UnitOfTime,
+    UnitOfTemperature,
     REVOLUTIONS_PER_MINUTE,
     PERCENTAGE,
 )
@@ -42,10 +43,24 @@ SENSORS: tuple[SikuSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SikuSensorEntityDescription(
+        key="room_temperature",
+        name="Room temperature",
+        icon="mdi:home-thermometer",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SikuSensorEntityDescription(
         key="humidity",
         name="Humidity",
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.HUMIDITY,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SikuSensorEntityDescription(
+        key="iaq_index",
+        name="Air quality index",
+        icon="mdi:air-filter",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     SikuSensorEntityDescription(
@@ -54,6 +69,13 @@ SENSORS: tuple[SikuSensorEntityDescription, ...] = (
         icon="mdi:rotate-right",
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SikuSensorEntityDescription(
+        key="max_rpm_protocol",
+        name="Max RPM (protocol)",
+        icon="mdi:gauge",
+        native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SikuSensorEntityDescription(
         key="firmware",
@@ -77,11 +99,31 @@ SENSORS: tuple[SikuSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
     ),
     SikuSensorEntityDescription(
+        key="filter_replacement_timer_setup_days",
+        name="Filter replacement timer setup",
+        icon="mdi:calendar-clock",
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        suggested_display_precision=0,
+        suggested_unit_of_measurement=UnitOfTime.DAYS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SikuSensorEntityDescription(
         key="timer_countdown",
         name="Timer countdown",
         icon="mdi:timer",
         native_unit_of_measurement=UnitOfTime.SECONDS,
         suggested_display_precision=2,
+        suggested_unit_of_measurement=UnitOfTime.MINUTES,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SikuSensorEntityDescription(
+        key="boost_delay_minutes",
+        name="Boost deactivation delay",
+        icon="mdi:timer-cog",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        suggested_display_precision=0,
         suggested_unit_of_measurement=UnitOfTime.MINUTES,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
@@ -122,9 +164,26 @@ SENSORS: tuple[SikuSensorEntityDescription, ...] = (
         icon="mdi:speedometer",
     ),
     SikuSensorEntityDescription(
+        key="timer_mode",
+        name="Timer mode",
+        icon="mdi:timer-settings",
+    ),
+    SikuSensorEntityDescription(
         key="mode",
         name="Mode",
         icon="mdi:fan-auto",
+    ),
+    SikuSensorEntityDescription(
+        key="device_type",
+        name="Device type",
+        icon="mdi:identifier",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SikuSensorEntityDescription(
+        key="supported_features",
+        name="Supported optional features",
+        icon="mdi:feature-search",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
 

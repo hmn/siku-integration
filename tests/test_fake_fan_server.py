@@ -103,3 +103,43 @@ def test_fake_fan_legacy_read_returns_values_not_only_unsupported():
 
     # Should not be a full stream of FD <cmd> unsupported markers.
     assert "FDB9FD01FD02" not in response_hex
+
+
+def test_fake_fan_supports_filter_replacement_timer_setup_read():
+    fan = FakeFanController("0036001B4246570E", "123456")
+    fan.filter_replacement_timer_setup_days = 365
+
+    request = _build_request(
+        fan,
+        FUNC_READ,
+        "63",
+        device_id="0036001B4246570E",
+        password="123456",
+    )
+
+    response = fan.process_packet(request)
+
+    assert response is not None
+    response_hex = response.hex().upper()
+    # FE 02 63 6D 01 means value is 0x016D (365) in little-endian on wire.
+    assert "FE02636D01" in response_hex
+
+
+def test_fake_fan_supports_filter_replacement_timer_setup_read_write():
+    fan = FakeFanController("0036001B4246570E", "123456")
+
+    request = _build_request(
+        fan,
+        FUNC_READ_WRITE,
+        "FE02634601",
+        device_id="0036001B4246570E",
+        password="123456",
+    )
+
+    response = fan.process_packet(request)
+
+    assert response is not None
+    assert fan.filter_replacement_timer_setup_days == 326
+
+    response_hex = response.hex().upper()
+    assert "FE02634601" in response_hex
