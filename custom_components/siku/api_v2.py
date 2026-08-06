@@ -80,6 +80,8 @@ COMMAND_S8_MODE = "0312"
 COMMAND_IAQ_INDEX = "0320"
 COMMAND_ENABLE_BOOST_PASSIVE = "032A"
 COMMAND_PASSIVE_VENT_MODE = "032B"
+COMMAND_HUMIDITY_SENSOR_STATUS = "0304"
+COMMAND_ZERO_TEN_V_SENSOR_STATUS = "0305"
 
 # Supply and exhaust fan speed per speed mode, the intake/exhaust balance.
 # Manual speed mode drives both fans from one speed and ignores these.
@@ -114,6 +116,11 @@ TIMER_MODES = {
     "00": "off",
     "01": "night",
     "02": "party",
+}
+
+SETPOINT_STATUS = {
+    0: "below setpoint",
+    1: "over setpoint",
 }
 
 EMPTY_VALUE = "00"
@@ -152,6 +159,20 @@ class SikuV2Api:
 
     async def status(self) -> dict:
         """Get status from fan controller."""
+        page_01 = COMMAND_RESTORE_PRESET_SPEEDS[:2]
+        page_03_optional_probes = (
+            COMMAND_NIGHT_MODE_TIMER,
+            COMMAND_PARTY_MODE_TIMER,
+            COMMAND_S8_POWER,
+            COMMAND_S8_SPEED,
+            COMMAND_S8_MODE,
+            COMMAND_IAQ_INDEX,
+            COMMAND_HUMIDITY_SENSOR_STATUS,
+            COMMAND_ZERO_TEN_V_SENSOR_STATUS,
+            COMMAND_ENABLE_BOOST_PASSIVE,
+            COMMAND_PASSIVE_VENT_MODE,
+        )
+
         commands = [
             COMMAND_DEVICE_TYPE,
             COMMAND_ON_OFF,
@@ -173,18 +194,11 @@ class SikuV2Api:
             *PRESET_SPEED_COMMANDS.values(),
             # Probe optional page 0x01 / 0x03 parameters used by newer devices.
             RETURN_HIGH_BYTE,
-            "01",
-            "2A",
+            page_01,
+            COMMAND_RESTORE_PRESET_SPEEDS[2:],
             RETURN_HIGH_BYTE,
-            "03",
-            "02",
-            "03",
-            "10",
-            "11",
-            "12",
-            "20",
-            "2A",
-            "2B",
+            COMMAND_NIGHT_MODE_TIMER[:2],
+            *[probe_cmd[2:] for probe_cmd in page_03_optional_probes],
         ]
         cmd = "".join(commands).upper()
         hexlist = await self._send_command(FUNC_READ, cmd)
@@ -451,6 +465,11 @@ class SikuV2Api:
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
 
+        # Defensive fallback for static analysis; runtime should not reach here.
+        raise TimeoutError(
+            f"Failed to send {func_name} command to {self.host}:{self.port} after retries"
+        )
+
     def _parse_hex_int(
         self, data: dict, key: str, default: int | None = None
     ) -> int | None:
@@ -522,6 +541,8 @@ class SikuV2Api:
         rpm = self._parse_hex_int(data, COMMAND_FAN1RPM)
         if rpm is None:
             rpm = self._parse_hex_int(data, COMMAND_FAN2RPM, 0)
+        if rpm is None:
+            return 0
         return int(rpm)
 
     def _parse_filter_timer_minutes(self, data: dict) -> int:
@@ -617,6 +638,22 @@ class SikuV2Api:
             room_temperature_raw / 10.0 if room_temperature_raw is not None else None
         )
         iaq_index = self._parse_hex_int(data, COMMAND_IAQ_INDEX)
+        humidity_sensor_status_raw = self._parse_hex_int(
+            data, COMMAND_HUMIDITY_SENSOR_STATUS
+        )
+        zero_ten_v_sensor_status_raw = self._parse_hex_int(
+            data, COMMAND_ZERO_TEN_V_SENSOR_STATUS
+        )
+        humidity_sensor_status = (
+            SETPOINT_STATUS.get(humidity_sensor_status_raw)
+            if humidity_sensor_status_raw is not None
+            else None
+        )
+        zero_ten_v_sensor_status = (
+            SETPOINT_STATUS.get(zero_ten_v_sensor_status_raw)
+            if zero_ten_v_sensor_status_raw is not None
+            else None
+        )
         rpm = self._parse_rpm(data)
         filter_timer = self._parse_filter_timer_minutes(data)
         alarm = self._parse_bool_nonzero(data, COMMAND_READ_ALARM, default=False)
@@ -670,6 +707,8 @@ class SikuV2Api:
             "filter_replacement_timer_setup_days": filter_replacement_timer_setup_days,
             "boost_delay_minutes": boost_delay_minutes,
             "device_type": device_type,
+            "humidity_sensor_status": humidity_sensor_status,
+            "zero_ten_v_sensor_status": zero_ten_v_sensor_status,
         }
         for key, value in optional_values.items():
             if value is not None:

@@ -185,6 +185,20 @@ SENSORS: tuple[SikuSensorEntityDescription, ...] = (
         icon="mdi:feature-search",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    SikuSensorEntityDescription(
+        key="humidity_sensor_status",
+        name="Humidity sensor status",
+        icon="mdi:water-percent-alert",
+        device_class=SensorDeviceClass.ENUM,
+        options=["below setpoint", "over setpoint"],
+    ),
+    SikuSensorEntityDescription(
+        key="zero_ten_v_sensor_status",
+        name="0-10V sensor status",
+        icon="mdi:chart-line",
+        device_class=SensorDeviceClass.ENUM,
+        options=["below setpoint", "over setpoint"],
+    ),
 )
 
 

@@ -58,13 +58,28 @@ COMMAND_FILTER_ALARM = "88"
 COMMAND_DIRECTION = "B7"
 COMMAND_DEVICE_TYPE = "B9"
 
+COMMAND_ROOM_TEMPERATURE = "21"
 COMMAND_RESTORE_PRESET_SPEEDS = "012A"
+COMMAND_NIGHT_MODE_TIMER = "0302"
+COMMAND_PARTY_MODE_TIMER = "0303"
 COMMAND_S8_POWER = "0310"
 COMMAND_S8_SPEED = "0311"
 COMMAND_S8_MODE = "0312"
-COMMAND_S8_BOOST = "0320"
+COMMAND_IAQ_INDEX = "0320"
+COMMAND_HUMIDITY_SENSOR_STATUS = "0304"
+COMMAND_ZERO_TEN_V_SENSOR_STATUS = "0305"
 COMMAND_ENABLE_BOOST_PASSIVE = "032A"
 COMMAND_PASSIVE_VENT_MODE = "032B"
+
+# Supply and exhaust fan speed per speed mode (1, 2, 3)
+PRESET_SPEED_COMMANDS = {
+    "supply_speed_1": "3A",
+    "exhaust_speed_1": "3B",
+    "supply_speed_2": "3C",
+    "exhaust_speed_2": "3D",
+    "supply_speed_3": "3E",
+    "exhaust_speed_3": "3F",
+}
 
 POWER_OFF = "00"
 POWER_ON = "01"
@@ -98,12 +113,15 @@ class FakeFanController:
         self.boost = False
         self.mode = MODE_OFF  # 01=sleep, 02=party
         self.humidity = 45  # Current humidity percentage
+        self.room_temperature_x10 = 239  # Room temperature in tenths (239 = 23.9°C)
         self.rpm = 1200  # Fan RPM
         self.filter_replacement_timer_setup_days = 120  # Param 0x63, 70..365 days
         self.filter_timer_minutes = (
             3 * 24 * 60 + 2 * 60 + 1
         )  # Minutes since filter change ( 3 days 2 hours 1 minute = 4441)
         self.timer_countdown_seconds = 0  # Countdown timer in seconds
+        self.humidity_sensor_status = "00"  # 00=below setpoint, 01=over setpoint
+        self.zero_ten_v_sensor_status = "00"  # 00=below setpoint, 01=over setpoint
         self.boost_delay_minutes = 0
         self.passive_boost_enabled = False
         self.passive_ventilation_mode = False
@@ -111,6 +129,21 @@ class FakeFanController:
         self.firmware_major = 2
         self.firmware_minor = 5
         self.device_type = "01"
+
+        # Extended parameters
+        self.night_mode_timer_minutes = 0  # Night mode timer in minutes (0x0302)
+        self.party_mode_timer_minutes = 0  # Party mode timer in minutes (0x0303)
+        self.iaq_index = 26  # Indoor air quality index (0x0320)
+
+        # Preset speed settings for supply and exhaust fans
+        self.preset_speeds = {
+            "supply_speed_1": 60,  # 0x3A
+            "exhaust_speed_1": 60,  # 0x3B
+            "supply_speed_2": 120,  # 0x3C
+            "exhaust_speed_2": 120,  # 0x3D
+            "supply_speed_3": 200,  # 0x3E
+            "exhaust_speed_3": 200,  # 0x3F
+        }
 
         LOGGER.info("Fake fan controller initialized")
         LOGGER.info(f"  Device ID: {self.device_id}")
@@ -209,6 +242,242 @@ class FakeFanController:
 
         return encoded, current_page
 
+    def _encode_minutes_value(self, low_cmd: str, total_minutes: int) -> str:
+        """Encode total minutes as little-endian [minutes, hours] payload."""
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+        return f"02{low_cmd}{minutes:02X}{hours:02X}"
+
+    def _decode_two_byte_le(self, value: str) -> int:
+        """Decode one- or two-byte little-endian hex value."""
+        if len(value) >= 4:
+            return int(value[2:4] + value[0:2], 16)
+        return int(value, 16)
+
+    def _set_timer_minutes_from_value(self, attr_name: str, value: str) -> int:
+        """Set minutes attribute from one- or two-byte little-endian value."""
+        if len(value) >= 4:
+            minutes = int(value[0:2], 16)
+            hours = int(value[2:4], 16)
+            setattr(self, attr_name, hours * 60 + minutes)
+        else:
+            setattr(self, attr_name, int(value, 16))
+        return getattr(self, attr_name)
+
+    def _get_full_command_state(
+        self, full_cmd: str, low_cmd: str
+    ) -> tuple[str, bool] | None:
+        """Get values handled by full 16-bit command IDs."""
+        full_handlers = {
+            COMMAND_S8_POWER: lambda: (POWER_ON if self.is_on else POWER_OFF, False),
+            COMMAND_S8_SPEED: lambda: (self.speed, False),
+            COMMAND_S8_MODE: lambda: (self.mode, False),
+            COMMAND_RESTORE_PRESET_SPEEDS: lambda: ("00", False),
+            COMMAND_HUMIDITY_SENSOR_STATUS: lambda: ("00", False),
+            COMMAND_ZERO_TEN_V_SENSOR_STATUS: lambda: ("00", False),
+            COMMAND_ENABLE_BOOST_PASSIVE: lambda: (
+                "01" if self.passive_boost_enabled else "00",
+                False,
+            ),
+            COMMAND_PASSIVE_VENT_MODE: lambda: (
+                "01" if self.passive_ventilation_mode else "00",
+                False,
+            ),
+            COMMAND_NIGHT_MODE_TIMER: lambda: (
+                self._encode_minutes_value(low_cmd, self.night_mode_timer_minutes),
+                True,
+            ),
+            COMMAND_PARTY_MODE_TIMER: lambda: (
+                self._encode_minutes_value(low_cmd, self.party_mode_timer_minutes),
+                True,
+            ),
+            COMMAND_IAQ_INDEX: lambda: (
+                f"02{low_cmd}{self.iaq_index & 0xFF:02X}{(self.iaq_index >> 8) & 0xFF:02X}",
+                True,
+            ),
+        }
+        handler = full_handlers.get(full_cmd)
+        if handler is None:
+            return None
+        return handler()
+
+    def _get_low_command_state(self, low_cmd: str) -> tuple[str, bool] | None:
+        """Get values handled by low-byte command IDs."""
+        single_byte_handlers = {
+            COMMAND_ON_OFF: lambda: (POWER_ON if self.is_on else POWER_OFF, False),
+            COMMAND_SPEED: lambda: (self.speed, False),
+            COMMAND_MANUAL_SPEED: lambda: (self.manual_speed, False),
+            COMMAND_DIRECTION: lambda: (self.direction, False),
+            COMMAND_BOOST: lambda: ("01" if self.boost else "00", False),
+            COMMAND_MODE: lambda: (self.mode, False),
+            COMMAND_CURRENT_HUMIDITY: lambda: (f"{self.humidity:02X}", False),
+            COMMAND_BOOST_DELAY: lambda: (f"{self.boost_delay_minutes:02X}", False),
+            COMMAND_READ_ALARM: lambda: ("01" if self.alarm else "00", False),
+            COMMAND_DEVICE_TYPE: lambda: (self.device_type, False),
+        }
+        handler = single_byte_handlers.get(low_cmd)
+        if handler is not None:
+            return handler()
+
+        if low_cmd == COMMAND_ROOM_TEMPERATURE:
+            return (
+                f"02{low_cmd}{self.room_temperature_x10 & 0xFF:02X}{(self.room_temperature_x10 >> 8) & 0xFF:02X}",
+                True,
+            )
+
+        if low_cmd in (COMMAND_FAN1RPM, COMMAND_FAN2RPM):
+            if self.rpm > 255:
+                return (
+                    f"02{low_cmd}{(self.rpm & 0xFF):02X}{(self.rpm >> 8):02X}",
+                    True,
+                )
+            return (f"{self.rpm:02X}", False)
+
+        if low_cmd == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
+            days = self.filter_replacement_timer_setup_days
+            return (f"02{low_cmd}{days & 0xFF:02X}{(days >> 8) & 0xFF:02X}", True)
+
+        if low_cmd == COMMAND_FILTER_TIMER:
+            days = self.filter_timer_minutes // (24 * 60)
+            remaining = self.filter_timer_minutes % (24 * 60)
+            hours = remaining // 60
+            minutes = remaining % 60
+            return (f"03{low_cmd}{minutes:02X}{hours:02X}{days:02X}", True)
+
+        if low_cmd == COMMAND_TIMER_COUNTDOWN:
+            hours = self.timer_countdown_seconds // 3600
+            remaining = self.timer_countdown_seconds % 3600
+            minutes = remaining // 60
+            seconds = remaining % 60
+            return (f"03{low_cmd}{seconds:02X}{minutes:02X}{hours:02X}", True)
+
+        if low_cmd == COMMAND_READ_FIRMWARE_VERSION:
+            now = datetime.now()
+            value = (
+                f"06{low_cmd}{self.firmware_major:02X}"
+                f"{self.firmware_minor:02X}{now.day:02X}{now.month:02X}"
+                f"{(now.year >> 8):02X}{(now.year & 0xFF):02X}"
+            )
+            return (value, True)
+
+        for key, cmd_hex in PRESET_SPEED_COMMANDS.items():
+            if low_cmd == cmd_hex:
+                return (f"{self.preset_speeds[key]:02X}", False)
+
+        return None
+
+    def _set_full_command_state(self, full_cmd: str, value: str) -> bool:
+        """Apply writes handled by full 16-bit command IDs."""
+        if full_cmd == COMMAND_RESTORE_PRESET_SPEEDS:
+            LOGGER.info("✓ Restore preset speed defaults requested")
+            return True
+
+        if full_cmd == COMMAND_ENABLE_BOOST_PASSIVE:
+            self.passive_boost_enabled = value != "00"
+            LOGGER.info(
+                "✓ Passive ventilation boost %s",
+                "enabled" if self.passive_boost_enabled else "disabled",
+            )
+            return True
+
+        if full_cmd == COMMAND_PASSIVE_VENT_MODE:
+            self.passive_ventilation_mode = value != "00"
+            LOGGER.info(
+                "✓ Passive ventilation mode %s",
+                "enabled" if self.passive_ventilation_mode else "disabled",
+            )
+            return True
+
+        if full_cmd == COMMAND_NIGHT_MODE_TIMER:
+            minutes = self._set_timer_minutes_from_value(
+                "night_mode_timer_minutes", value
+            )
+            LOGGER.info(f"✓ Night mode timer set to: {minutes} minutes")
+            return True
+
+        if full_cmd == COMMAND_PARTY_MODE_TIMER:
+            minutes = self._set_timer_minutes_from_value(
+                "party_mode_timer_minutes", value
+            )
+            LOGGER.info(f"✓ Party mode timer set to: {minutes} minutes")
+            return True
+
+        if full_cmd == COMMAND_IAQ_INDEX:
+            self.iaq_index = self._decode_two_byte_le(value)
+            LOGGER.info(f"✓ IAQ index set to: {self.iaq_index}")
+            return True
+
+        return False
+
+    def _set_room_temperature(self, value: str):
+        self.room_temperature_x10 = self._decode_two_byte_le(value)
+        temp_c = self.room_temperature_x10 / 10.0
+        LOGGER.info(f"✓ Room temperature set to: {temp_c}°C")
+
+    def _set_boost_delay(self, value: str):
+        self.boost_delay_minutes = int(value, 16)
+        LOGGER.info("✓ Boost delay set to: %s minutes", self.boost_delay_minutes)
+
+    def _set_filter_replacement_timer_setup(self, value: str):
+        self.filter_replacement_timer_setup_days = self._decode_two_byte_le(value)
+        LOGGER.info(
+            "✓ Filter replacement timer setup set to: %s days",
+            self.filter_replacement_timer_setup_days,
+        )
+
+    def _set_preset_speed(self, low_cmd: str, value: str):
+        for key, cmd_hex in PRESET_SPEED_COMMANDS.items():
+            if low_cmd == cmd_hex:
+                self.preset_speeds[key] = int(value, 16)
+                LOGGER.info(f"✓ {key} set to: {int(value, 16)}")
+                return
+
+    def _set_on_off(self, value: str):
+        if value == POWER_ON:
+            self.is_on = True
+            LOGGER.info("✓ Fan turned ON")
+        elif value == POWER_OFF:
+            self.is_on = False
+            LOGGER.info("✓ Fan turned OFF")
+        elif value == POWER_TOGGLE:
+            self.is_on = not self.is_on
+            LOGGER.info(f"✓ Fan toggled to {'ON' if self.is_on else 'OFF'}")
+
+    def _set_speed(self, value: str):
+        self.speed = value
+        LOGGER.info(f"✓ Speed set to: {int(value, 16)}")
+
+    def _set_manual_speed(self, value: str):
+        self.manual_speed = value
+        percentage = (int(value, 16) / 255.0) * 100
+        LOGGER.info(f"✓ Manual speed set to: {int(value, 16)} ({percentage:.1f}%)")
+
+    def _set_direction(self, value: str):
+        self.direction = value
+        direction_names = {
+            "00": "Forward (ventilation)",
+            "01": "Alternating (heat recovery)",
+            "02": "Reverse (supply)",
+        }
+        LOGGER.info(f"✓ Direction set to: {direction_names.get(value, value)}")
+
+    def _set_boost(self, value: str):
+        self.boost = value != "00"
+        LOGGER.info(f"✓ Boost {'enabled' if self.boost else 'disabled'}")
+
+    def _set_mode(self, value: str):
+        self.mode = value
+        mode_names = {"01": "Sleep", "02": "Party"}
+        LOGGER.info(f"✓ Mode set to: {mode_names.get(value, value)}")
+
+    def _set_reset_filter_timer(self, _value: str):
+        self.filter_timer_minutes = 0
+        LOGGER.info("✓ Filter timer reset")
+
+    def _set_reset_alarms(self, _value: str):
+        self.alarm = False
+        LOGGER.info("✓ Alarms reset")
+
     def _get_state_value(self, command: str) -> tuple[str, bool]:
         """Get current state value for a command.
 
@@ -219,166 +488,53 @@ class FakeFanController:
         full_cmd = self._full_command(command)
         low_cmd = full_cmd[2:]
 
-        if full_cmd in (COMMAND_S8_POWER,):
-            return (POWER_ON if self.is_on else POWER_OFF, False)
-        elif full_cmd in (COMMAND_S8_SPEED,):
-            return (self.speed, False)
-        elif full_cmd in (COMMAND_S8_MODE,):
-            return (self.mode, False)
-        elif full_cmd in (COMMAND_S8_BOOST,):
-            return ("01" if self.boost else "00", False)
-        elif full_cmd == COMMAND_ENABLE_BOOST_PASSIVE:
-            return ("01" if self.passive_boost_enabled else "00", False)
-        elif full_cmd == COMMAND_PASSIVE_VENT_MODE:
-            return ("01" if self.passive_ventilation_mode else "00", False)
-        elif low_cmd == COMMAND_ON_OFF:
-            return (POWER_ON if self.is_on else POWER_OFF, False)
-        elif low_cmd == COMMAND_SPEED:
-            return (self.speed, False)
-        elif low_cmd == COMMAND_MANUAL_SPEED:
-            return (self.manual_speed, False)
-        elif low_cmd == COMMAND_DIRECTION:
-            return (self.direction, False)
-        elif low_cmd == COMMAND_BOOST:
-            return ("01" if self.boost else "00", False)
-        elif low_cmd == COMMAND_MODE:
-            return (self.mode, False)
-        elif low_cmd == COMMAND_CURRENT_HUMIDITY:
-            return (f"{self.humidity:02X}", False)
-        elif low_cmd in (COMMAND_FAN1RPM, COMMAND_FAN2RPM):
-            # RPM can be larger than 255, so use multi-byte for values > 255
-            if self.rpm > 255:
-                # Multi-byte value: size + command + data (2 bytes for RPM, little-endian)
-                return (
-                    f"02{low_cmd}{(self.rpm & 0xFF):02X}{(self.rpm >> 8):02X}",
-                    True,
-                )
-            else:
-                return (f"{self.rpm:02X}", False)
-        elif low_cmd == COMMAND_BOOST_DELAY:
-            return (f"{self.boost_delay_minutes:02X}", False)
-        elif low_cmd == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
-            # Param 0x63 is 2 bytes (little-endian on wire): [lo, hi].
-            days = self.filter_replacement_timer_setup_days
-            return (f"02{low_cmd}{days & 0xFF:02X}{(days >> 8) & 0xFF:02X}", True)
-        elif low_cmd == COMMAND_FILTER_TIMER:
-            # On-wire byte order matches real device: [minutes, hours, days].
-            # _parse_response reverses bytes, so after reversal data["64"] = "DDHHMM".
-            # _translate_response then reads days/hours/minutes using negative indexing.
-            days = self.filter_timer_minutes // (24 * 60)
-            remaining = self.filter_timer_minutes % (24 * 60)
-            hours = remaining // 60
-            minutes = remaining % 60
-            # Multi-byte value: FE + size + command + data
-            return (f"03{low_cmd}{minutes:02X}{hours:02X}{days:02X}", True)
-        elif low_cmd == COMMAND_TIMER_COUNTDOWN:
-            # Spec: Byte1=seconds, Byte2=minutes, Byte3=hours.
-            # _parse_response reverses bytes, so after reversal data["0B"] = "HHMMSS".
-            # _translate_response reads [0:2]=hours, [2:4]=minutes, [4:6]=seconds.
-            hours = self.timer_countdown_seconds // 3600
-            remaining = self.timer_countdown_seconds % 3600
-            minutes = remaining // 60
-            seconds = remaining % 60
-            # Multi-byte value: FE + size + command + data
-            return (f"03{low_cmd}{seconds:02X}{minutes:02X}{hours:02X}", True)
-        elif low_cmd == COMMAND_READ_ALARM:
-            return ("01" if self.alarm else "00", False)
-        elif low_cmd == COMMAND_READ_FIRMWARE_VERSION:
-            # Return firmware version as multi-byte value
-            now = datetime.now()
-            value = (
-                f"06{low_cmd}{self.firmware_major:02X}"
-                f"{self.firmware_minor:02X}{now.day:02X}{now.month:02X}"
-                f"{(now.year >> 8):02X}{(now.year & 0xFF):02X}"
-            )
-            return (value, True)
-        elif low_cmd == COMMAND_DEVICE_TYPE:
-            return (self.device_type, False)
-        else:
-            LOGGER.warning(f"Unknown command: {full_cmd}")
-            return (RETURN_INVALID + low_cmd, False)
+        state = self._get_full_command_state(full_cmd, low_cmd)
+        if state is None:
+            state = self._get_low_command_state(low_cmd)
+        if state is not None:
+            return state
+
+        LOGGER.warning(f"Unknown command: {full_cmd}")
+        return (RETURN_INVALID + low_cmd, False)
 
     def _set_state_value(self, command: str, value: str):
         """Set state value for a command."""
         full_cmd = self._full_command(command)
         low_cmd = full_cmd[2:]
 
-        if full_cmd == COMMAND_RESTORE_PRESET_SPEEDS:
-            LOGGER.info("✓ Restore preset speed defaults requested")
-            return
-        elif full_cmd == COMMAND_ENABLE_BOOST_PASSIVE:
-            self.passive_boost_enabled = value != "00"
-            LOGGER.info(
-                "✓ Passive ventilation boost %s",
-                "enabled" if self.passive_boost_enabled else "disabled",
-            )
-            return
-        elif full_cmd == COMMAND_PASSIVE_VENT_MODE:
-            self.passive_ventilation_mode = value != "00"
-            LOGGER.info(
-                "✓ Passive ventilation mode %s",
-                "enabled" if self.passive_ventilation_mode else "disabled",
-            )
-            return
-        elif low_cmd == COMMAND_BOOST_DELAY:
-            self.boost_delay_minutes = int(value, 16)
-            LOGGER.info("✓ Boost delay set to: %s minutes", self.boost_delay_minutes)
-            return
-        elif low_cmd == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
-            # Write uses 2-byte little-endian value when sent via FE size command.
-            # Fallback to one-byte value if legacy payload is used.
-            if len(value) >= 4:
-                self.filter_replacement_timer_setup_days = int(
-                    value[2:4] + value[0:2], 16
-                )
-            else:
-                self.filter_replacement_timer_setup_days = int(value, 16)
-            LOGGER.info(
-                "✓ Filter replacement timer setup set to: %s days",
-                self.filter_replacement_timer_setup_days,
-            )
+        if self._set_full_command_state(full_cmd, value):
             return
 
-        if low_cmd == COMMAND_ON_OFF:
-            if value == POWER_ON:
-                self.is_on = True
-                LOGGER.info("✓ Fan turned ON")
-            elif value == POWER_OFF:
-                self.is_on = False
-                LOGGER.info("✓ Fan turned OFF")
-            elif value == POWER_TOGGLE:
-                self.is_on = not self.is_on
-                LOGGER.info(f"✓ Fan toggled to {'ON' if self.is_on else 'OFF'}")
-        elif low_cmd == COMMAND_SPEED:
-            self.speed = value
-            LOGGER.info(f"✓ Speed set to: {int(value, 16)}")
-        elif low_cmd == COMMAND_MANUAL_SPEED:
-            self.manual_speed = value
-            percentage = (int(value, 16) / 255.0) * 100
-            LOGGER.info(f"✓ Manual speed set to: {int(value, 16)} ({percentage:.1f}%)")
-        elif low_cmd == COMMAND_DIRECTION:
-            self.direction = value
-            direction_names = {
-                "00": "Forward (ventilation)",
-                "01": "Alternating (heat recovery)",
-                "02": "Reverse (supply)",
-            }
-            LOGGER.info(f"✓ Direction set to: {direction_names.get(value, value)}")
-        elif low_cmd == COMMAND_BOOST:
-            self.boost = value != "00"
-            LOGGER.info(f"✓ Boost {'enabled' if self.boost else 'disabled'}")
-        elif low_cmd == COMMAND_MODE:
-            self.mode = value
-            mode_names = {"01": "Sleep", "02": "Party"}
-            LOGGER.info(f"✓ Mode set to: {mode_names.get(value, value)}")
-        elif low_cmd == COMMAND_RESET_FILTER_TIMER:
-            self.filter_timer_minutes = 0
-            LOGGER.info("✓ Filter timer reset")
-        elif low_cmd == COMMAND_RESET_ALARMS:
-            self.alarm = False
-            LOGGER.info("✓ Alarms reset")
-        else:
-            LOGGER.warning(f"Unknown write command: {full_cmd} = {value}")
+        low_handlers = {
+            COMMAND_ROOM_TEMPERATURE: self._set_room_temperature,
+            COMMAND_BOOST_DELAY: self._set_boost_delay,
+            COMMAND_FILTER_REPLACEMENT_TIMER_SETUP: self._set_filter_replacement_timer_setup,
+        }
+        low_handler = low_handlers.get(low_cmd)
+        if low_handler is not None:
+            low_handler(value)
+            return
+
+        if low_cmd in PRESET_SPEED_COMMANDS.values():
+            self._set_preset_speed(low_cmd, value)
+            return
+
+        command_handlers = {
+            COMMAND_ON_OFF: self._set_on_off,
+            COMMAND_SPEED: self._set_speed,
+            COMMAND_MANUAL_SPEED: self._set_manual_speed,
+            COMMAND_DIRECTION: self._set_direction,
+            COMMAND_BOOST: self._set_boost,
+            COMMAND_MODE: self._set_mode,
+            COMMAND_RESET_FILTER_TIMER: self._set_reset_filter_timer,
+            COMMAND_RESET_ALARMS: self._set_reset_alarms,
+        }
+        command_handler = command_handlers.get(low_cmd)
+        if command_handler is not None:
+            command_handler(value)
+            return
+
+        LOGGER.warning(f"Unknown write command: {full_cmd} = {value}")
 
     def _parse_data_commands(self, hexlist, data_start, data_end, expect_values: bool):
         """Parse request DATA block with support for page/size special commands."""
@@ -451,10 +607,16 @@ class FakeFanController:
             if raw_value is None:
                 continue
 
-            # For single-byte values this is already one byte. For multi-byte
-            # values (on-wire little-endian), use the least significant byte in
-            # this simulator unless command-specific handling is needed.
-            if full_cmd[2:] == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
+            # For multi-byte commands, pass the full value; for single-byte, take first 2 hex chars
+            multi_byte_commands = [
+                COMMAND_FILTER_REPLACEMENT_TIMER_SETUP,
+                COMMAND_ROOM_TEMPERATURE,
+                COMMAND_NIGHT_MODE_TIMER,
+                COMMAND_PARTY_MODE_TIMER,
+                COMMAND_IAQ_INDEX,
+            ]
+
+            if full_cmd in multi_byte_commands or full_cmd[2:] in multi_byte_commands:
                 value = raw_value
             else:
                 value = raw_value[:2]
@@ -473,7 +635,16 @@ class FakeFanController:
             if raw_value is None:
                 continue
 
-            if full_cmd[2:] == COMMAND_FILTER_REPLACEMENT_TIMER_SETUP:
+            # For multi-byte commands, pass the full value; for single-byte, take first 2 hex chars
+            multi_byte_commands = [
+                COMMAND_FILTER_REPLACEMENT_TIMER_SETUP,
+                COMMAND_ROOM_TEMPERATURE,
+                COMMAND_NIGHT_MODE_TIMER,
+                COMMAND_PARTY_MODE_TIMER,
+                COMMAND_IAQ_INDEX,
+            ]
+
+            if full_cmd in multi_byte_commands or full_cmd[2:] in multi_byte_commands:
                 value = raw_value
             else:
                 value = raw_value[:2]

@@ -609,6 +609,20 @@ async def test_status_reads_preset_speeds(api):
 
 
 @pytest.mark.asyncio
+async def test_status_probes_page3_setpoint_status_fields(api):
+    with (
+        patch.object(api, "_send_command", new=AsyncMock()) as mock_send,
+        patch.object(api, "_parse_response", new=AsyncMock(return_value={})),
+    ):
+        await api.status()
+
+        sent_data = mock_send.call_args[0][1]
+        assert "FF03" in sent_data
+        assert "04" in sent_data
+        assert "05" in sent_data
+
+
+@pytest.mark.asyncio
 async def test_preset_speeds_translate(api):
     """Parameters the fan did not answer are left out."""
     result = await api._translate_response({"3A": "33", "3B": "27"})
@@ -852,3 +866,17 @@ async def test_translate_response_reports_supported_optional_features(api):
         "restore_preset_speeds, passive_boost, passive_ventilation"
     )
     assert translated["max_rpm_protocol"] == 5000
+
+
+@pytest.mark.asyncio
+async def test_translate_response_parses_optional_sensor_status_fields(api):
+    """Optional page-3 sensor status fields are surfaced when present."""
+    translated = await api._translate_response(
+        {
+            "0304": "01",
+            "0305": "00",
+        }
+    )
+
+    assert translated["humidity_sensor_status"] == "over setpoint"
+    assert translated["zero_ten_v_sensor_status"] == "below setpoint"
