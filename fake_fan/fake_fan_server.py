@@ -71,6 +71,14 @@ COMMAND_ZERO_TEN_V_SENSOR_STATUS = "0305"
 COMMAND_ENABLE_BOOST_PASSIVE = "032A"
 COMMAND_PASSIVE_VENT_MODE = "032B"
 
+MULTIBYTE_COMMANDS: set[str] = {
+    COMMAND_FILTER_REPLACEMENT_TIMER_SETUP,
+    COMMAND_ROOM_TEMPERATURE,
+    COMMAND_NIGHT_MODE_TIMER,
+    COMMAND_PARTY_MODE_TIMER,
+    COMMAND_IAQ_INDEX,
+}
+
 # Supply and exhaust fan speed per speed mode (1, 2, 3)
 PRESET_SPEED_COMMANDS = {
     "supply_speed_1": "3A",
@@ -273,8 +281,14 @@ class FakeFanController:
             COMMAND_S8_SPEED: lambda: (self.speed, False),
             COMMAND_S8_MODE: lambda: (self.mode, False),
             COMMAND_RESTORE_PRESET_SPEEDS: lambda: ("00", False),
-            COMMAND_HUMIDITY_SENSOR_STATUS: lambda: ("00", False),
-            COMMAND_ZERO_TEN_V_SENSOR_STATUS: lambda: ("00", False),
+            COMMAND_HUMIDITY_SENSOR_STATUS: lambda: (
+                self.humidity_sensor_status,
+                False,
+            ),
+            COMMAND_ZERO_TEN_V_SENSOR_STATUS: lambda: (
+                self.zero_ten_v_sensor_status,
+                False,
+            ),
             COMMAND_ENABLE_BOOST_PASSIVE: lambda: (
                 "01" if self.passive_boost_enabled else "00",
                 False,
@@ -608,15 +622,7 @@ class FakeFanController:
                 continue
 
             # For multi-byte commands, pass the full value; for single-byte, take first 2 hex chars
-            multi_byte_commands = [
-                COMMAND_FILTER_REPLACEMENT_TIMER_SETUP,
-                COMMAND_ROOM_TEMPERATURE,
-                COMMAND_NIGHT_MODE_TIMER,
-                COMMAND_PARTY_MODE_TIMER,
-                COMMAND_IAQ_INDEX,
-            ]
-
-            if full_cmd in multi_byte_commands or full_cmd[2:] in multi_byte_commands:
+            if full_cmd in MULTIBYTE_COMMANDS or full_cmd[2:] in MULTIBYTE_COMMANDS:
                 value = raw_value
             else:
                 value = raw_value[:2]
@@ -636,15 +642,7 @@ class FakeFanController:
                 continue
 
             # For multi-byte commands, pass the full value; for single-byte, take first 2 hex chars
-            multi_byte_commands = [
-                COMMAND_FILTER_REPLACEMENT_TIMER_SETUP,
-                COMMAND_ROOM_TEMPERATURE,
-                COMMAND_NIGHT_MODE_TIMER,
-                COMMAND_PARTY_MODE_TIMER,
-                COMMAND_IAQ_INDEX,
-            ]
-
-            if full_cmd in multi_byte_commands or full_cmd[2:] in multi_byte_commands:
+            if full_cmd in MULTIBYTE_COMMANDS or full_cmd[2:] in MULTIBYTE_COMMANDS:
                 value = raw_value
             else:
                 value = raw_value[:2]

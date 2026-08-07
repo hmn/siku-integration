@@ -8,7 +8,7 @@ from homeassistant.components.number import (
     NumberMode,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
+from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -39,6 +39,7 @@ FILTER_REPLACEMENT_TIMER_NUMBER = NumberEntityDescription(
     native_min_value=70,
     native_max_value=365,
     native_step=1,
+    native_unit_of_measurement=UnitOfTime.DAYS,
     mode=NumberMode.BOX,
 )
 

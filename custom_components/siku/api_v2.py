@@ -281,7 +281,9 @@ class SikuV2Api:
     async def filter_replacement_timer_setup(self, days: int) -> dict:
         """Set filter replacement timer setup (0x0063) in days."""
         if not 70 <= days <= 365:
-            raise ValueError(f"Invalid filter replacement timer setup days: {days}")
+            raise ValueError(
+                f"Invalid filter replacement timer setup days: {days} (must be 70..365)"
+            )
         # 0x0063 is a 2-byte value. Use FE to provide explicit value size.
         cmd = f"{RETURN_VALUE_SIZE}02{COMMAND_FILTER_REPLACEMENT_TIMER_SETUP}{days & 0xFF:02X}{(days >> 8) & 0xFF:02X}".upper()
         await self._send_command(FUNC_READ_WRITE, cmd)
