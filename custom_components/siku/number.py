@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Protocol, cast
+
 from homeassistant.components.number import (
     NumberEntity,
     NumberEntityDescription,
@@ -42,6 +44,14 @@ FILTER_REPLACEMENT_TIMER_NUMBER = NumberEntityDescription(
     native_unit_of_measurement=UnitOfTime.DAYS,
     mode=NumberMode.BOX,
 )
+
+
+class _NumberApiProtocol(Protocol):
+    """API surface needed by number entities."""
+
+    async def preset_speed(self, key: str, speed: int) -> dict: ...
+
+    async def filter_replacement_timer_setup(self, days: int) -> dict: ...
 
 
 async def async_setup_entry(
@@ -93,12 +103,17 @@ class SikuNumber(SikuEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Set a new speed."""
+        api = self.coordinator.api
+        if not hasattr(api, "preset_speed") or not hasattr(
+            api, "filter_replacement_timer_setup"
+        ):
+            return
+        number_api = cast(_NumberApiProtocol, api)
+
         if self.entity_description.key == FILTER_REPLACEMENT_TIMER_NUMBER.key:
-            response = await self.coordinator.api.filter_replacement_timer_setup(
-                int(value)
-            )
+            response = await number_api.filter_replacement_timer_setup(int(value))
         else:
-            response = await self.coordinator.api.preset_speed(
+            response = await number_api.preset_speed(
                 self.entity_description.key, int(value)
             )
         self.coordinator.async_set_updated_data(response)

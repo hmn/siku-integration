@@ -46,6 +46,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]):
 
     Data has the keys from USER_SCHEMA with values provided by the user.
     """
+    api: SikuV1Api | SikuV2Api
     if data[CONF_VERSION] == 1:
         api = SikuV1Api(data[CONF_IP_ADDRESS], data[CONF_PORT])
     elif data[CONF_VERSION] == 2:

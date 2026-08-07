@@ -82,7 +82,7 @@ class SikuButton(SikuEntity, ButtonEntity):
         self,
         hass: HomeAssistant,
         coordinator: SikuDataUpdateCoordinator,
-        description: ButtonEntityDescription,
+        description: SikuButtonEntityDescription,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator=coordinator, context=description.key)
