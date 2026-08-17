@@ -26,6 +26,21 @@
       "type": "shell",
       "command": "pytest",
       "problemMatcher": []
+    },
+    {
+      "label": "Type check using mypy",
+      "type": "shell",
+      "command": "mypy",
+      "args": ["custom_components/siku", "--ignore-missing-imports"],
+      "problemMatcher": ["$mypy-python"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      }
     }
   ]
 }

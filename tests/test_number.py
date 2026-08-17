@@ -11,6 +11,7 @@ def _coordinator(preset_speeds):
     coordinator = MagicMock()
     coordinator.data = {"preset_speeds": preset_speeds}
     coordinator.api.preset_speed = AsyncMock(return_value={"preset_speeds": {}})
+    coordinator.api.filter_replacement_timer_setup = AsyncMock(return_value={})
     return coordinator
 
 
@@ -49,3 +50,21 @@ async def test_native_value_and_set():
 
     coordinator.api.preset_speed.assert_awaited_once_with("exhaust_speed_2", 70)
     coordinator.async_set_updated_data.assert_called_once_with({"preset_speeds": {}})
+
+
+@pytest.mark.asyncio
+async def test_filter_replacement_timer_setup_number_availability_and_set():
+    coordinator = _coordinator({})
+    coordinator.data["filter_replacement_timer_setup_days"] = 120
+
+    entities = await _setup(coordinator)
+    keys = [entity.entity_description.key for entity in entities]
+
+    assert keys == ["filter_replacement_timer_setup"]
+
+    entity = entities[0]
+    assert entity.native_value == 120
+
+    await entity.async_set_native_value(150.0)
+    coordinator.api.filter_replacement_timer_setup.assert_awaited_once_with(150)
+    coordinator.async_set_updated_data.assert_called_once_with({})

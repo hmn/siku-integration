@@ -6,7 +6,7 @@ import logging
 import asyncio
 import random
 from types import NoneType
-from typing import Literal
+from typing import Any, Literal, cast
 from .udp import AsyncUdpClient
 from homeassistant.util.percentage import percentage_to_ranged_value
 
@@ -506,18 +506,23 @@ class SikuV1Api:
         for command, value in commands:
             if command not in CONTROL:
                 raise ValueError(f"Invalid command: {command}")
-            if not isinstance(value, CONTROL[command]["value"]):
+
+            command_meta = CONTROL[command]
+            value_type = cast(type[Any], command_meta["value"])
+            if not isinstance(value, value_type):
                 raise TypeError(
-                    f"Invalid value {value} for command {command}: got {type(value)} but must be of type {CONTROL[command]['value']}"
+                    f"Invalid value {value} for command {command}: got {type(value)} but must be of type {command_meta['value']}"
                 )
 
             # packet_command = bytes.fromhex(command)
-            packet_command = CONTROL[command]["cmd"].to_bytes(1, byteorder="big")
-            packet_size = CONTROL[command]["size"]
+            packet_command = cast(int, command_meta["cmd"]).to_bytes(1, byteorder="big")
+            packet_size = cast(int, command_meta["size"])
             if isinstance(value, NoneType):
-                value = 0
+                value_int = 0
+            else:
+                value_int = int(value)
             # LOGGER.debug("value: %s (%s)", value, type(value))
-            packet_value = value.to_bytes(packet_size, byteorder="big")
+            packet_value = value_int.to_bytes(packet_size, byteorder="big")
             # LOGGER.debug("packet_value: %s", packet_value)
             # LOGGER.debug("packet_command: %s", packet_command)
             packet_data_list.append(packet_command + packet_value)
@@ -622,19 +627,22 @@ class SikuV1Api:
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
 
-    async def _translate_response(self, hexlist: list[str]) -> dict:
+        raise TimeoutError(
+            f"Failed to send command to {self.host}:{self.port} after retries"
+        )
+
+    async def _translate_response(self, hexlist: list[str]) -> dict[str, Any]:
         """Translate response from fan controller."""
-        data = {}
+        data: dict[str, Any] = {}
         # traverse hexlist response and match feedback params
         i = 0
         while i < len(hexlist):
-            cmd = hexlist[i]
             cmd = int(hexlist[i], 16)
             # loop all of the feedback params to find a match
             for key, item in FEEDBACK.items():
                 if cmd == item["cmd"]:
-                    size = item["size"]
-                    value_type = item["value"]
+                    size = cast(int, item["size"])
+                    value_type = cast(type[Any], item["value"])
                     value_raw = hexlist[i + 1 : i + 1 + size]
                     # LOGGER.debug("value_raw:%s", value_raw)
                     if value_type is not NoneType:

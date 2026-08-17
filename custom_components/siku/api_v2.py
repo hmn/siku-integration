@@ -46,9 +46,13 @@ COMMAND_DEVICE_TYPE = "B9"
 COMMAND_BOOST = "06"
 COMMAND_MODE = "07"
 COMMAND_TIMER_COUNTDOWN = "0B"
+COMMAND_ROOM_TEMPERATURE = "21"
 COMMAND_CURRENT_HUMIDITY = "25"
 COMMAND_MANUAL_SPEED = "44"
 COMMAND_FAN1RPM = "4A"
+COMMAND_FAN2RPM = "4B"
+COMMAND_BOOST_DELAY = "66"
+COMMAND_FILTER_REPLACEMENT_TIMER_SETUP = "63"
 # Byte 1: Minutes (0...59)
 # Byte 2: Hours (0...23)
 # Byte 3: Days (0...181)
@@ -66,6 +70,18 @@ COMMAND_READ_ALARM = "83"
 COMMAND_READ_FIRMWARE_VERSION = "86"
 COMMAND_FILTER_ALARM = "88"
 COMMAND_FAN_TYPE = "B9"
+
+COMMAND_RESTORE_PRESET_SPEEDS = "012A"
+COMMAND_NIGHT_MODE_TIMER = "0302"
+COMMAND_PARTY_MODE_TIMER = "0303"
+COMMAND_S8_POWER = "0310"
+COMMAND_S8_SPEED = "0311"
+COMMAND_S8_MODE = "0312"
+COMMAND_IAQ_INDEX = "0320"
+COMMAND_ENABLE_BOOST_PASSIVE = "032A"
+COMMAND_PASSIVE_VENT_MODE = "032B"
+COMMAND_HUMIDITY_SENSOR_STATUS = "0304"
+COMMAND_ZERO_TEN_V_SENSOR_STATUS = "0305"
 
 # Supply and exhaust fan speed per speed mode, the intake/exhaust balance.
 # Manual speed mode drives both fans from one speed and ignores these.
@@ -88,13 +104,23 @@ POWER_OFF = "00"
 POWER_ON = "01"
 POWER_TOGGLE = "02"
 
-MODE_OFF = "01"
+MODE_OFF = "00"
 MODE_SLEEP = "01"
 MODE_PARTY = "02"
 MODES = {
     MODE_OFF: PRESET_MODE_AUTO,
     MODE_SLEEP: PRESET_MODE_SLEEP,
     MODE_PARTY: PRESET_MODE_PARTY,
+}
+TIMER_MODES = {
+    "00": "off",
+    "01": "night",
+    "02": "party",
+}
+
+SETPOINT_STATUS = {
+    0: "below setpoint",
+    1: "over setpoint",
 }
 
 EMPTY_VALUE = "00"
@@ -104,6 +130,7 @@ SPEED_MANUAL_MAX: int = 255
 
 SPEED_PRESET_MIN: int = 10
 SPEED_PRESET_MAX: int = 255
+PROTOCOL_MAX_RPM: int = 5000
 
 
 class SikuV2Api:
@@ -132,6 +159,20 @@ class SikuV2Api:
 
     async def status(self) -> dict:
         """Get status from fan controller."""
+        page_01 = COMMAND_RESTORE_PRESET_SPEEDS[:2]
+        page_03_optional_probes = (
+            COMMAND_NIGHT_MODE_TIMER,
+            COMMAND_PARTY_MODE_TIMER,
+            COMMAND_S8_POWER,
+            COMMAND_S8_SPEED,
+            COMMAND_S8_MODE,
+            COMMAND_IAQ_INDEX,
+            COMMAND_HUMIDITY_SENSOR_STATUS,
+            COMMAND_ZERO_TEN_V_SENSOR_STATUS,
+            COMMAND_ENABLE_BOOST_PASSIVE,
+            COMMAND_PASSIVE_VENT_MODE,
+        )
+
         commands = [
             COMMAND_DEVICE_TYPE,
             COMMAND_ON_OFF,
@@ -141,12 +182,23 @@ class SikuV2Api:
             COMMAND_BOOST,
             COMMAND_MODE,
             COMMAND_TIMER_COUNTDOWN,
+            COMMAND_ROOM_TEMPERATURE,
             COMMAND_CURRENT_HUMIDITY,
             COMMAND_FAN1RPM,
+            COMMAND_FAN2RPM,
+            COMMAND_BOOST_DELAY,
+            COMMAND_FILTER_REPLACEMENT_TIMER_SETUP,
             COMMAND_FILTER_TIMER,
             COMMAND_READ_ALARM,
             COMMAND_READ_FIRMWARE_VERSION,
             *PRESET_SPEED_COMMANDS.values(),
+            # Probe optional page 0x01 / 0x03 parameters used by newer devices.
+            RETURN_HIGH_BYTE,
+            page_01,
+            COMMAND_RESTORE_PRESET_SPEEDS[2:],
+            RETURN_HIGH_BYTE,
+            COMMAND_NIGHT_MODE_TIMER[:2],
+            *[probe_cmd[2:] for probe_cmd in page_03_optional_probes],
         ]
         cmd = "".join(commands).upper()
         hexlist = await self._send_command(FUNC_READ, cmd)
@@ -224,6 +276,17 @@ class SikuV2Api:
         """Reset filter alarm."""
         cmd = f"{COMMAND_RESET_ALARMS}{EMPTY_VALUE}{COMMAND_RESET_FILTER_TIMER}{EMPTY_VALUE}".upper()
         await self._send_command(FUNC_WRITE, cmd)
+        return await self.status()
+
+    async def filter_replacement_timer_setup(self, days: int) -> dict:
+        """Set filter replacement timer setup (0x0063) in days."""
+        if not 70 <= days <= 365:
+            raise ValueError(
+                f"Invalid filter replacement timer setup days: {days} (must be 70..365)"
+            )
+        # 0x0063 is a 2-byte value. Use FE to provide explicit value size.
+        cmd = f"{RETURN_VALUE_SIZE}02{COMMAND_FILTER_REPLACEMENT_TIMER_SETUP}{days & 0xFF:02X}{(days >> 8) & 0xFF:02X}".upper()
+        await self._send_command(FUNC_READ_WRITE, cmd)
         return await self.status()
 
     def _checksum(self, data: str) -> str:
@@ -404,87 +467,215 @@ class SikuV2Api:
                 sleep_for = delay + random.uniform(0, 0.15)
                 await asyncio.sleep(sleep_for)
 
-    async def _translate_response(self, data: dict) -> dict:
-        """Translate response data to dict."""
-        LOGGER.debug("translate response: %s", data)
+        # Defensive fallback for static analysis; runtime should not reach here.
+        raise TimeoutError(
+            f"Failed to send {func_name} command to {self.host}:{self.port} after retries"
+        )
+
+    def _parse_hex_int(
+        self, data: dict, key: str, default: int | None = None
+    ) -> int | None:
+        """Parse one hex-encoded integer value from response data."""
         try:
-            is_on = bool(data[COMMAND_ON_OFF] == POWER_ON)
-        except KeyError:
-            is_on = False
+            return int(data[key], 16)
+        except (KeyError, ValueError, TypeError):
+            return default
+
+    def _parse_formatted_hex(
+        self, data: dict, key: str, default: str, fallback_key: str | None = None
+    ) -> str:
+        """Parse a one-byte hex value and format as 2-char uppercase hex."""
+        value = self._parse_hex_int(data, key)
+        if value is not None:
+            return f"{value:02}"
+        if fallback_key is not None:
+            fallback_value = self._parse_hex_int(data, fallback_key)
+            if fallback_value is not None:
+                return f"{fallback_value:02}"
+        return default
+
+    def _parse_bool_onoff(
+        self, data: dict, key: str, fallback_key: str | None = None
+    ) -> bool:
+        """Parse a bool where only POWER_ON means true, optionally with fallback key."""
+        raw = data.get(key)
+        if raw is not None:
+            return bool(raw == POWER_ON)
+        if fallback_key is not None:
+            return bool(data.get(fallback_key) == POWER_ON)
+        return False
+
+    def _parse_mapped_with_fallback(
+        self,
+        data: dict,
+        key: str,
+        mapping: dict[str, str],
+        default: str | None,
+        fallback_key: str | None = None,
+    ) -> str | None:
+        """Parse mapped value, using fallback only when primary is absent/empty."""
+        raw = data.get(key)
+        if raw in mapping:
+            return mapping[raw]
+        if raw in (None, "") and fallback_key is not None:
+            fallback_raw = data.get(fallback_key)
+            if fallback_raw in mapping:
+                return mapping[fallback_raw]
+        return default
+
+    def _parse_bool_nonzero(self, data: dict, key: str, default: bool = False) -> bool:
+        """Parse bool where any non-empty and non-zero value means true."""
+        raw = data.get(key)
+        if raw is None:
+            return default
+        return bool(raw and raw != "00")
+
+    def _parse_direction_and_oscillating(self, data: dict) -> tuple[str | None, bool]:
+        """Parse direction and derived oscillating state."""
+        raw = data.get(COMMAND_DIRECTION)
+        if raw in DIRECTIONS:
+            direction = DIRECTIONS[raw]
+            return direction, bool(direction == DIRECTION_ALTERNATING)
+        return None, True
+
+    def _parse_rpm(self, data: dict) -> int:
+        """Parse RPM with fallback from 0x4A to 0x4B."""
+        rpm = self._parse_hex_int(data, COMMAND_FAN1RPM)
+        if rpm is None:
+            rpm = self._parse_hex_int(data, COMMAND_FAN2RPM, 0)
+        if rpm is None:
+            return 0
+        return int(rpm)
+
+    def _parse_filter_timer_minutes(self, data: dict) -> int:
+        """Parse filter timer (0x64) as total minutes."""
+        raw = data.get(COMMAND_FILTER_TIMER)
+        if not raw:
+            return 0
         try:
-            speed = f"{int(data[COMMAND_SPEED], 16):02}"
-        except KeyError:
-            speed = "255"
-        try:
-            manual_speed = f"{int(data[COMMAND_MANUAL_SPEED], 16):02}"
-        except KeyError:
-            manual_speed = "00"
-        try:
-            direction = DIRECTIONS[data[COMMAND_DIRECTION]]
-            oscillating = bool(direction == DIRECTION_ALTERNATING)
-        except KeyError:
-            direction = None
-            oscillating = True
-        try:
-            boost = bool(data[COMMAND_BOOST] != "00")
-        except KeyError:
-            boost = False
-        try:
-            mode = MODES[data[COMMAND_MODE]]
-        except KeyError:
-            mode = PRESET_MODE_AUTO
-        try:
-            humidity = int(data[COMMAND_CURRENT_HUMIDITY], 16)
-        except KeyError:
-            humidity = None
-        try:
-            rpm = int(data[COMMAND_FAN1RPM], 16)
-        except KeyError:
-            rpm = 0
-        try:
-            raw = data[COMMAND_FILTER_TIMER]
-            LOGGER.debug("FILTER_TIMER raw: %s", raw)
-            # Spec (parameter 0x64): Byte1=minutes (0..59), Byte2=hours (0..23), Byte3=days (0..181).
-            # Byte size is 3 per spec but devices may pad with extra leading 0x00 bytes.
-            # _parse_response reverses the on-wire bytes, so after reversal the layout is:
-            #   [...padding bytes...][days][hours][minutes]  (each field is 2 hex chars).
-            # Use negative indexing so the last 3 bytes are always days/hours/minutes
-            # regardless of how many padding bytes precede them.
             minutes = int(raw[-2:], 16)
             hours = int(raw[-4:-2], 16)
             days = int(raw[-6:-4], 16)
-            filter_timer = int(days * 24 * 60 + hours * 60 + minutes)
-        except KeyError:
-            filter_timer = 0
+            return int(days * 24 * 60 + hours * 60 + minutes)
+        except (ValueError, TypeError):
+            return 0
+
+    def _parse_timer_countdown_seconds(self, data: dict) -> int:
+        """Parse timer countdown (0x0B) as total seconds."""
+        raw = data.get(COMMAND_TIMER_COUNTDOWN)
+        if not raw:
+            return 0
         try:
-            alarm = bool(data[COMMAND_READ_ALARM] != "00")
-        except KeyError:
-            alarm = False
+            hours = int(raw[0:2], 16)
+            minutes = int(raw[2:4], 16)
+            seconds = int(raw[4:6], 16)
+            return int(seconds + minutes * 60 + hours * 60 * 60)
+        except (ValueError, TypeError):
+            return 0
+
+    def _parse_hhmm_minutes(self, data: dict, key: str) -> int | None:
+        """Parse reversed FE multi-byte HHMM value as total minutes."""
+        raw = data.get(key)
+        if not raw:
+            return None
         try:
-            # Byte 1: Firmware-Version (major)
-            # Byte 2: Firmware-Version (minor)
-            # Byte 3: Day
-            # Byte 4: Month
-            # Byte 5 and 6: Year
-            firmware = f"{int(data[COMMAND_READ_FIRMWARE_VERSION][0], 16)}.{int(data[COMMAND_READ_FIRMWARE_VERSION][1], 16)}"
-        except KeyError:
-            firmware = None
+            hours = int(raw[0:2], 16)
+            minutes = int(raw[2:4], 16)
+            return int(hours * 60 + minutes)
+        except (ValueError, TypeError):
+            return None
+
+    def _parse_firmware_version(self, data: dict) -> str | None:
+        """Parse firmware version string from 0x86 payload."""
         try:
-            # Byte 1 – seconds (0…59)
-            # Byte 2 – minutes (0…59)
-            # Byte 3 – hours (0…23)
-            hours = int(data[COMMAND_TIMER_COUNTDOWN][0:2], 16)
-            minutes = int(data[COMMAND_TIMER_COUNTDOWN][2:4], 16)
-            seconds = int(data[COMMAND_TIMER_COUNTDOWN][4:6], 16)
-            timer_countdown = int(seconds + minutes * 60 + hours * 60 * 60)
-        except KeyError:
-            timer_countdown = 0
+            value = data[COMMAND_READ_FIRMWARE_VERSION]
+            return f"{int(value[0], 16)}.{int(value[1], 16)}"
+        except (KeyError, ValueError, TypeError, IndexError):
+            return None
+
+    def _parse_supported_capabilities(self, data: dict) -> list[str]:
+        """Parse optional capability flags from known optional parameters."""
+        capability_pairs = (
+            (COMMAND_RESTORE_PRESET_SPEEDS, "restore_preset_speeds"),
+            (COMMAND_ENABLE_BOOST_PASSIVE, "passive_boost"),
+            (COMMAND_PASSIVE_VENT_MODE, "passive_ventilation"),
+        )
+        return [name for cmd, name in capability_pairs if data.get(cmd, "") != ""]
+
+    async def _translate_response(self, data: dict) -> dict:
+        """Translate response data to dict."""
+        LOGGER.debug("translate response: %s", data)
+        is_on = self._parse_bool_onoff(
+            data, COMMAND_ON_OFF, fallback_key=COMMAND_S8_POWER
+        )
+        speed = self._parse_formatted_hex(
+            data,
+            COMMAND_SPEED,
+            default="255",
+            fallback_key=COMMAND_S8_SPEED,
+        )
+        manual_speed = self._parse_formatted_hex(
+            data, COMMAND_MANUAL_SPEED, default="00"
+        )
+        direction, oscillating = self._parse_direction_and_oscillating(data)
+        boost = self._parse_bool_nonzero(data, COMMAND_BOOST, default=False)
+        timer_mode = self._parse_mapped_with_fallback(
+            data,
+            COMMAND_MODE,
+            mapping=TIMER_MODES,
+            default=None,
+            fallback_key=COMMAND_S8_MODE,
+        )
+        mode = self._parse_mapped_with_fallback(
+            data,
+            COMMAND_MODE,
+            mapping=MODES,
+            default=PRESET_MODE_AUTO,
+            fallback_key=COMMAND_S8_MODE,
+        )
+
+        humidity = self._parse_hex_int(data, COMMAND_CURRENT_HUMIDITY)
+        room_temperature_raw = self._parse_hex_int(data, COMMAND_ROOM_TEMPERATURE)
+        room_temperature = (
+            room_temperature_raw / 10.0 if room_temperature_raw is not None else None
+        )
+        iaq_index = self._parse_hex_int(data, COMMAND_IAQ_INDEX)
+        humidity_sensor_status_raw = self._parse_hex_int(
+            data, COMMAND_HUMIDITY_SENSOR_STATUS
+        )
+        zero_ten_v_sensor_status_raw = self._parse_hex_int(
+            data, COMMAND_ZERO_TEN_V_SENSOR_STATUS
+        )
+        humidity_sensor_status = (
+            SETPOINT_STATUS.get(humidity_sensor_status_raw)
+            if humidity_sensor_status_raw is not None
+            else None
+        )
+        zero_ten_v_sensor_status = (
+            SETPOINT_STATUS.get(zero_ten_v_sensor_status_raw)
+            if zero_ten_v_sensor_status_raw is not None
+            else None
+        )
+        rpm = self._parse_rpm(data)
+        filter_timer = self._parse_filter_timer_minutes(data)
+        alarm = self._parse_bool_nonzero(data, COMMAND_READ_ALARM, default=False)
+        firmware = self._parse_firmware_version(data)
+        timer_countdown = self._parse_timer_countdown_seconds(data)
+        night_mode_timer = self._parse_hhmm_minutes(data, COMMAND_NIGHT_MODE_TIMER)
+        party_mode_timer = self._parse_hhmm_minutes(data, COMMAND_PARTY_MODE_TIMER)
+        filter_replacement_timer_setup_days = self._parse_hex_int(
+            data, COMMAND_FILTER_REPLACEMENT_TIMER_SETUP
+        )
+        boost_delay_minutes = self._parse_hex_int(data, COMMAND_BOOST_DELAY)
+        device_type = self._parse_hex_int(data, COMMAND_DEVICE_TYPE)
+        supported_capabilities = self._parse_supported_capabilities(data)
+
         preset_speeds = {
             key: int(data[cmd], 16)
             for key, cmd in PRESET_SPEED_COMMANDS.items()
             if data.get(cmd)
         }
-        return {
+        result = {
             "is_on": is_on,
             "preset_speeds": preset_speeds,
             "speed": speed,
@@ -498,15 +689,37 @@ class SikuV2Api:
             "oscillating": oscillating,
             "direction": direction,
             "boost": boost,
+            "timer_mode": timer_mode,
             "mode": mode,
+            "room_temperature": room_temperature,
             "humidity": humidity,
+            "iaq_index": iaq_index,
             "rpm": rpm,
             "firmware": firmware,
             "filter_timer_minutes": filter_timer,
             "timer_countdown": timer_countdown,
             "alarm": alarm,
+            "max_rpm_protocol": PROTOCOL_MAX_RPM,
             "version": "2",
         }
+
+        optional_values = {
+            "night_mode_timer": night_mode_timer,
+            "party_mode_timer": party_mode_timer,
+            "filter_replacement_timer_setup_days": filter_replacement_timer_setup_days,
+            "boost_delay_minutes": boost_delay_minutes,
+            "device_type": device_type,
+            "humidity_sensor_status": humidity_sensor_status,
+            "zero_ten_v_sensor_status": zero_ten_v_sensor_status,
+        }
+        for key, value in optional_values.items():
+            if value is not None:
+                result[key] = value
+
+        if supported_capabilities:
+            result["supported_features"] = ", ".join(supported_capabilities)
+
+        return result
 
     async def _parse_response(self, hexlist: list[str]) -> dict:
         """Translate response from fan controller."""
@@ -514,6 +727,7 @@ class SikuV2Api:
         data = {}
         try:
             start = 0
+            page = "00"
 
             # prefix
             LOGGER.debug("start: %s", start)
@@ -584,45 +798,65 @@ class SikuV2Api:
             while i < (len(hexlist) - 2):
                 LOGGER.debug("parse data %s : %s", i, hexlist[i])
                 parameter = hexlist[i]
-                value_size = 1
                 cmd = ""
                 value = ""
+
                 if parameter == RETURN_CHANGE_FUNC:
+                    # Mixed operations can appear in one response; not needed for
+                    # value decoding, so skip and continue.
+                    i += 1
                     LOGGER.debug(
-                        "special function, change base function not implemented %s",
-                        parameter,
+                        "special function, change base function to %s", hexlist[i]
                     )
-                    raise NotImplementedError(
-                        f"special function, change base function not implemented {parameter}"
-                    )
+                    i += 1
+                    continue
+
                 if parameter == RETURN_HIGH_BYTE:
-                    LOGGER.debug(
-                        "special function, high byte not implemented %s", parameter
-                    )
-                    raise NotImplementedError(
-                        f"special function, high byte not implemented {parameter}"
-                    )
+                    i += 1
+                    page = hexlist[i]
+                    LOGGER.debug("special function, high byte page set to %s", page)
+                    i += 1
+                    continue
+
                 if parameter == RETURN_INVALID:
                     i += 1
                     cmd = hexlist[i]
+                    if page != "00":
+                        cmd = f"{page}{cmd}"
                     LOGGER.debug("special function, invalid cmd:%s", cmd)
-                elif parameter == RETURN_VALUE_SIZE:
+                    data.update({cmd: ""})
+                    i += 1
+                    continue
+
+                if parameter == RETURN_VALUE_SIZE:
                     i += 1
                     value_size = int(hexlist[i], 16)
                     LOGGER.debug("special function, value size %s", value_size)
                     i += 1
                     cmd = hexlist[i]
+                    if page != "00":
+                        cmd = f"{page}{cmd}"
+
                     value = "".join(hexlist[i + 1 : i + 1 + value_size])
                     # reverse byte order
                     value = "".join(
                         [value[idx : idx + 2] for idx in range(0, len(value), 2)][::-1]
                     )
-                    i += value_size
-                else:
-                    cmd = parameter
-                    i += 1
-                    value = hexlist[i]
-                    LOGGER.debug("normal function, cmd:%s value:%s", cmd, value)
+                    data.update({cmd: value})
+                    LOGGER.debug(
+                        "return data cmd:%s value:%s",
+                        cmd,
+                        value,
+                    )
+                    i += 1 + value_size
+                    continue
+
+                cmd = parameter
+                if page != "00":
+                    cmd = f"{page}{cmd}"
+                i += 1
+                value = hexlist[i]
+                LOGGER.debug("normal function, cmd:%s value:%s", cmd, value)
 
                 data.update({cmd: value})
                 LOGGER.debug(
@@ -631,6 +865,10 @@ class SikuV2Api:
                     value,
                 )
                 i += 1
+        except IndexError as ex:
+            raise ValueError(
+                f"Error translating response from fan controller: {str(ex)}"
+            ) from ex
         except KeyError as ex:
             raise ValueError(
                 f"Error translating response from fan controller: {str(ex)}"

@@ -609,9 +609,274 @@ async def test_status_reads_preset_speeds(api):
 
 
 @pytest.mark.asyncio
+async def test_status_probes_page3_setpoint_status_fields(api):
+    with (
+        patch.object(api, "_send_command", new=AsyncMock()) as mock_send,
+        patch.object(api, "_parse_response", new=AsyncMock(return_value={})),
+    ):
+        await api.status()
+
+        sent_data = mock_send.call_args[0][1]
+        assert "FF03" in sent_data
+        assert "04" in sent_data
+        assert "05" in sent_data
+
+
+@pytest.mark.asyncio
 async def test_preset_speeds_translate(api):
     """Parameters the fan did not answer are left out."""
     result = await api._translate_response({"3A": "33", "3B": "27"})
 
     assert result["preset_speeds"] == {"supply_speed_1": 51, "exhaust_speed_1": 39}
     assert (await api._translate_response({}))["preset_speeds"] == {}
+
+
+@pytest.mark.asyncio
+async def test_parse_response_supports_high_byte_page_switch(api):
+    """The parser should support 0xFF high-byte commands used by newer app traffic."""
+    hexlist = _HEADER + ["FF", "03", "10", "01", "11", "02", "20", "00"] + _CHECKSUM
+
+    data = await api._parse_response(hexlist)
+
+    assert data["0310"] == "01"
+    assert data["0311"] == "02"
+    assert data["0320"] == "00"
+
+
+@pytest.mark.asyncio
+async def test_parse_response_supports_change_func_special_command(api):
+    """The parser should skip 0xFC function-change markers instead of failing."""
+    hexlist = _HEADER + ["FC", "01", "01", "01"] + _CHECKSUM
+
+    data = await api._parse_response(hexlist)
+
+    assert data["01"] == "01"
+
+
+@pytest.mark.asyncio
+async def test_translate_response_uses_fan2_rpm_fallback(api):
+    """If 0x4A is absent, use 0x4B for RPM."""
+    result = await api._translate_response({"4B": "84"})
+    assert result["rpm"] == 132
+
+
+@pytest.mark.asyncio
+async def test_parse_translate_app_traffic_replay_issue_171(api):
+    """Replay-style packet with app-like ordering and page-3 parameters.
+
+    Mirrors the DUKA S8 traffic pattern from issue #171 where the payload contains:
+    - base-page fields (06/07/0B/25/4B/66/83/B9)
+    - FF 03 page switch followed by low bytes 12/20/11/10
+    """
+    hexlist = (
+        _HEADER
+        + [
+            "06",
+            "00",  # boost off
+            "07",
+            "00",  # mode off/auto fallback
+            "FE",
+            "03",
+            "0B",
+            "00",
+            "00",
+            "00",  # timer countdown (sec/min/hour on wire)
+            "FE",
+            "02",
+            "21",
+            "F6",
+            "00",  # room temperature=24.6C (0x00F6 / 10)
+            "25",
+            "33",  # humidity=51
+            "FE",
+            "02",
+            "4B",
+            "84",
+            "03",  # fan2 rpm=900 (little-endian on wire)
+            "66",
+            "05",  # boost delay (not translated yet)
+            "83",
+            "00",  # no alarm
+            "B9",
+            "03",  # unit type
+            "FF",
+            "03",  # high-byte page switch
+            "FE",
+            "02",
+            "02",
+            "1E",
+            "00",  # night mode timer setpoint: 00:30 => 30 min
+            "FE",
+            "02",
+            "03",
+            "0F",
+            "01",  # party mode timer setpoint: 01:15 => 75 min
+            "12",
+            "01",
+            "FE",
+            "02",
+            "20",
+            "2E",
+            "00",  # IAQ index=46 (0x002E)
+            "11",
+            "02",
+            "10",
+            "01",
+        ]
+        + _CHECKSUM
+    )
+
+    data = await api._parse_response(hexlist)
+    translated = await api._translate_response(data)
+
+    # page-3 commands are retained with full 16-bit command ids
+    assert data["0312"] == "01"
+    assert data["0320"] == "002E"
+    assert data["0311"] == "02"
+    assert data["0310"] == "01"
+
+    # v2 translation remains backwards compatible while accepting this payload
+    assert translated["boost"] is False
+    assert translated["timer_mode"] == "off"
+    assert translated["mode"] == "auto"
+    assert translated["room_temperature"] == 24.6
+    assert translated["humidity"] == 51
+    assert translated["iaq_index"] == 46
+    assert translated["rpm"] == 900
+    assert translated["night_mode_timer"] == 30
+    assert translated["party_mode_timer"] == 75
+    assert translated["boost_delay_minutes"] == 5
+    assert translated["device_type"] == 3
+    assert translated["timer_countdown"] == 0
+    assert translated["alarm"] is False
+
+
+@pytest.mark.asyncio
+async def test_translate_response_handles_unsupported_empty_values(api):
+    """Unsupported parameters (FD xx) are parsed as empty strings and must not crash."""
+    data = {
+        "B9": "",
+        "01": "",
+        "02": "",
+        "44": "",
+        "B7": "",
+        "06": "",
+        "07": "",
+        "0B": "",
+        "25": "",
+        "4A": "",
+        "4B": "",
+        "64": "",
+        "83": "",
+        "86": "",
+        "3A": "",
+        "3B": "",
+        "3C": "",
+        "3D": "",
+        "3E": "",
+        "3F": "",
+    }
+
+    translated = await api._translate_response(data)
+
+    assert translated["is_on"] is False
+    assert translated["speed"] == "255"
+    assert translated["manual_speed"] == 0
+    assert translated["boost"] is False
+    assert translated["mode"] == "auto"
+    assert translated["humidity"] is None
+    assert translated["rpm"] == 0
+    assert translated["filter_timer_minutes"] == 0
+    assert translated["alarm"] is False
+
+
+@pytest.mark.asyncio
+async def test_translate_response_supports_s8_fallback_fields(api):
+    """When base-page fields are absent, page-3 values are used as fallbacks."""
+    translated = await api._translate_response(
+        {
+            "0310": "01",
+            "0311": "03",
+            "0312": "02",
+        }
+    )
+
+    assert translated["is_on"] is True
+    assert translated["speed"] == "03"
+    assert translated["timer_mode"] == "party"
+    assert translated["mode"] == "party"
+    assert translated["boost"] is False
+
+
+@pytest.mark.asyncio
+async def test_translate_response_parses_room_temperature_and_iaq(api):
+    translated = await api._translate_response(
+        {
+            "21": "00F6",  # 24.6C
+            "0320": "002E",  # IAQ 46
+        }
+    )
+
+    assert translated["room_temperature"] == 24.6
+    assert translated["iaq_index"] == 46
+
+
+@pytest.mark.asyncio
+async def test_translate_response_parses_timer_mode_from_command_mode(api):
+    translated = await api._translate_response({"07": "01"})
+    assert translated["timer_mode"] == "night"
+
+
+@pytest.mark.asyncio
+async def test_translate_response_parses_night_and_party_mode_timer_setpoints(api):
+    translated = await api._translate_response(
+        {
+            "0302": "001E",  # 00h 30m
+            "0303": "010F",  # 01h 15m
+        }
+    )
+
+    assert translated["night_mode_timer"] == 30
+    assert translated["party_mode_timer"] == 75
+
+
+@pytest.mark.asyncio
+async def test_translate_response_parses_filter_replacement_timer_setup_days(api):
+    translated = await api._translate_response(
+        {
+            "63": "016D",  # 365 days
+        }
+    )
+
+    assert translated["filter_replacement_timer_setup_days"] == 365
+
+
+@pytest.mark.asyncio
+async def test_translate_response_reports_supported_optional_features(api):
+    """Optional capability summary should include supported optional commands."""
+    translated = await api._translate_response(
+        {
+            "012A": "01",
+            "032A": "01",
+            "032B": "00",
+        }
+    )
+
+    assert translated["supported_features"] == (
+        "restore_preset_speeds, passive_boost, passive_ventilation"
+    )
+    assert translated["max_rpm_protocol"] == 5000
+
+
+@pytest.mark.asyncio
+async def test_translate_response_parses_optional_sensor_status_fields(api):
+    """Optional page-3 sensor status fields are surfaced when present."""
+    translated = await api._translate_response(
+        {
+            "0304": "01",
+            "0305": "00",
+        }
+    )
+
+    assert translated["humidity_sensor_status"] == "over setpoint"
+    assert translated["zero_ten_v_sensor_status"] == "below setpoint"

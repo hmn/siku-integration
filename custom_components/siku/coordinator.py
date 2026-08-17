@@ -35,6 +35,7 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
     """Data update coordinator for the Deluge integration."""
 
     config_entry: ConfigEntry
+    api: SikuV1Api | SikuV2Api
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the coordinator."""
