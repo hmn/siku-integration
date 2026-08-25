@@ -317,13 +317,25 @@ class SikuFan(SikuEntity, FanEntity):
         await super().async_added_to_hass()
         self._handle_coordinator_update()
 
+    def _coordinator_reports_fan_off(self) -> bool:
+        """Return whether coordinator data should be treated as off.
+
+        Some devices report on/off inconsistently and expose preset speed "00"
+        while the dedicated power field still looks on. Treat that as off so we
+        don't try to map an invalid speed into Home Assistant percentages.
+        """
+        return (
+            not self.coordinator.data["is_on"]
+            or self.coordinator.data.get("speed") in {"00", 0}
+        )
+
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         LOGGER.debug("Handling coordinator update %s", self.coordinator.data)
         if self.coordinator.data is None:
             return
-        if self.coordinator.data["is_on"]:
+        if not self._coordinator_reports_fan_off():
             LOGGER.debug("Fan is on")
             if self.coordinator.data["manual_speed_selected"]:
                 LOGGER.debug(
@@ -381,7 +393,13 @@ class SikuFan(SikuEntity, FanEntity):
                 else:
                     self.set_preset_mode(PRESET_MODE_ON)
         else:
-            LOGGER.debug("Fan is off")
+            LOGGER.debug(
+                "Fan is off%s",
+                " due to reported speed 00"
+                if self.coordinator.data.get("speed") in {"00", 0}
+                and self.coordinator.data["is_on"]
+                else "",
+            )
             self.set_percentage(0)
 
         if (
