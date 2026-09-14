@@ -253,6 +253,21 @@ class TestPresetModeNeverNone:
                 f"{fan._attr_preset_mode!r} when fan turned off"
             )
 
+    def test_coordinator_update_treats_speed_00_as_off(self):
+        """A reported speed of "00" must be treated as off even if is_on is true."""
+        data = _make_coordinator_data(is_on=True, speed="00")
+        fan = _make_fan(coordinator_data=data)
+        fan._attr_preset_mode = PRESET_MODE_ON
+        fan.schedule_update_ha_state = MagicMock()
+        fan.async_write_ha_state = MagicMock()
+
+        fan.coordinator.data = data
+        fan._handle_coordinator_update()
+
+        assert fan._attr_percentage == 0
+        assert fan.is_on is False
+        assert fan._attr_preset_mode == PRESET_MODE_ON
+
     # --- async_set_percentage(0) with manual_speed_selected -------------------
 
     @pytest.mark.asyncio
