@@ -68,3 +68,26 @@ async def test_filter_replacement_timer_setup_number_availability_and_set():
     await entity.async_set_native_value(150.0)
     coordinator.api.filter_replacement_timer_setup.assert_awaited_once_with(150)
     coordinator.async_set_updated_data.assert_called_once_with({})
+
+
+@pytest.mark.asyncio
+async def test_manual_speed_number_availability_value_and_set():
+    """Manual speed surfaces for any fan reporting it and is exposed as a percentage."""
+    coordinator = _coordinator({})
+    coordinator.data["manual_speed"] = 128
+    coordinator.data["manual_speed_low_high_range"] = (0.0, 255.0)
+    coordinator.api.power_on = AsyncMock()
+    coordinator.api.speed_manual = AsyncMock(return_value={"manual_speed": 64})
+
+    entities = await _setup(coordinator)
+    keys = [entity.entity_description.key for entity in entities]
+
+    assert keys == ["manual_speed"]
+
+    entity = entities[0]
+    assert entity.native_value == 50
+
+    await entity.async_set_native_value(25.0)
+    coordinator.api.power_on.assert_awaited_once()
+    coordinator.api.speed_manual.assert_awaited_once_with(25)
+    coordinator.async_set_updated_data.assert_called_once_with({"manual_speed": 64})

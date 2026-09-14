@@ -10,9 +10,10 @@ from homeassistant.components.number import (
     NumberMode,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util.percentage import ranged_value_to_percentage
 
 from . import SikuEntity
 from .api_v2 import PRESET_SPEED_COMMANDS, SPEED_PRESET_MAX, SPEED_PRESET_MIN
@@ -20,6 +21,7 @@ from .const import DOMAIN
 from .coordinator import SikuDataUpdateCoordinator
 
 FILTER_REPLACEMENT_TIMER_SETUP_KEY = "filter_replacement_timer_setup_days"
+MANUAL_SPEED_KEY = "manual_speed"
 
 NUMBERS: tuple[NumberEntityDescription, ...] = tuple(
     NumberEntityDescription(
@@ -43,6 +45,17 @@ FILTER_REPLACEMENT_TIMER_NUMBER = NumberEntityDescription(
     native_step=1,
     native_unit_of_measurement=UnitOfTime.DAYS,
     mode=NumberMode.BOX,
+)
+
+# Manual speed as a percentage; both v1 and v2 map it onto the raw 0-255 range.
+MANUAL_SPEED_NUMBER = NumberEntityDescription(
+    key=MANUAL_SPEED_KEY,
+    name="Manual speed",
+    native_min_value=1,
+    native_max_value=100,
+    native_step=1,
+    native_unit_of_measurement=PERCENTAGE,
+    mode=NumberMode.SLIDER,
 )
 
 
@@ -75,6 +88,9 @@ async def async_setup_entry(
     if FILTER_REPLACEMENT_TIMER_SETUP_KEY in data:
         entities.append(SikuNumber(coordinator, FILTER_REPLACEMENT_TIMER_NUMBER))
 
+    if MANUAL_SPEED_KEY in data:
+        entities.append(SikuNumber(coordinator, MANUAL_SPEED_NUMBER))
+
     async_add_entities(entities, True)
 
 
@@ -99,11 +115,23 @@ class SikuNumber(SikuEntity, NumberEntity):
         """Return the current speed."""
         if self.entity_description.key == FILTER_REPLACEMENT_TIMER_NUMBER.key:
             return self.coordinator.data.get(FILTER_REPLACEMENT_TIMER_SETUP_KEY)
+        if self.entity_description.key == MANUAL_SPEED_NUMBER.key:
+            return ranged_value_to_percentage(
+                self.coordinator.data["manual_speed_low_high_range"],
+                self.coordinator.data[MANUAL_SPEED_KEY],
+            )
         return self.coordinator.data["preset_speeds"].get(self.entity_description.key)
 
     async def async_set_native_value(self, value: float) -> None:
         """Set a new speed."""
         api = self.coordinator.api
+        if self.entity_description.key == MANUAL_SPEED_NUMBER.key:
+            # Mirror fan.async_set_percentage: speed_manual also switches the
+            # fan into manual mode, but only takes effect while powered on.
+            await api.power_on()
+            response = await api.speed_manual(int(value))
+            self.coordinator.async_set_updated_data(response)
+            return
         if not hasattr(api, "preset_speed") or not hasattr(
             api, "filter_replacement_timer_setup"
         ):

@@ -19,8 +19,34 @@
 | Platform | Description |
 | -------- | ----------- |
 | `fan`    | Siku (Blauberg) Fan |
+| `number` | Manual speed (v1 and v2), supply/exhaust preset speeds and filter replacement timer (v2 only) |
+| `sensor` | Humidity, temperature, RPM, timers and other status values reported by the fan |
+| `button` | Reset filter alarm, party mode, sleep mode |
 
 Integration for https://www.siku.at/produkte/ wifi fans
+
+### Manual speed
+
+The fan has three fixed speeds (33 / 66 / 100 % on the `fan` entity) and a
+manual mode with fine-grained control. The manual speed is exposed in two ways:
+
+- **`number.<fan> Manual speed`** — a 1–100 % slider. Setting it powers the fan
+  on if needed and switches it to manual mode, so this is the simplest way to
+  set an exact speed from the UI or an automation:
+
+  ```yaml
+  action: number.set_value
+  target:
+    entity_id: number.siku_blauberg_fan_192_168_1_50_manual_speed
+  data:
+    value: 45
+  ```
+
+- **`fan.set_percentage`** while the fan is in the `manual` preset mode. In the
+  other preset modes the percentage snaps to the three fixed speeds.
+
+Both map the percentage onto the fan's raw 0–255 manual speed value. On v1
+fans values below 9 % are raised to 9 % — the motor does not run below that.
 
 ### Tested on
 
@@ -52,15 +78,21 @@ The fan is sold under different brands, for instance :
 Using your HA configuration directory (folder) as a starting point you should now also have this:
 
 ```text
+custom_components/siku/translations/da.json
 custom_components/siku/translations/en.json
 custom_components/siku/__init__.py
-custom_components/siku/api.py
+custom_components/siku/api_v1.py
+custom_components/siku/api_v2.py
+custom_components/siku/button.py
 custom_components/siku/config_flow.py
 custom_components/siku/const.py
-custom_components/siku/cordinator.py
+custom_components/siku/coordinator.py
 custom_components/siku/fan.py
 custom_components/siku/manifest.json
+custom_components/siku/number.py
+custom_components/siku/sensor.py
 custom_components/siku/strings.json
+custom_components/siku/udp.py
 ```
 
 ## Configuration is done in the UI
