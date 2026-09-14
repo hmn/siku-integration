@@ -53,16 +53,16 @@ class SikuDataUpdateCoordinator(DataUpdateCoordinator):
             CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
         )
 
+        # HA sets self.config_entry from this argument; it is used for
+        # unique_id generation and must be passed explicitly (not via ContextVar).
         super().__init__(
             hass=hass,
             logger=LOGGER,
+            config_entry=entry,
             name=name,
             update_interval=timedelta(seconds=update_interval_seconds),
             update_method=self._update_method,
         )
-
-        # Keep a stable reference to the config entry for unique_id generation.
-        self.config_entry = entry
 
     @property
     def device_info(self) -> DeviceInfo:
