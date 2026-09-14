@@ -7,6 +7,7 @@ from custom_components.siku.fan import SikuFan
 from custom_components.siku.const import (
     DIRECTIONS,
     DIRECTION_FORWARD,
+    FAN_SPEEDS,
     PRESET_MODE_AUTO,
     PRESET_MODE_MANUAL,
     PRESET_MODE_ON,
@@ -389,3 +390,19 @@ class TestReapplySamePresetWhenFanOff:
         await fan.async_set_preset_mode(PRESET_MODE_MANUAL)
 
         fan.coordinator.api.power_on.assert_called()
+
+
+class TestSpeedCountFollowsMode:
+    """speed_count must track the current mode, not be cached at first access."""
+
+    def test_speed_count_updates_when_entering_manual_mode(self):
+        """Switching to manual after first access must raise speed_count to 100."""
+        fan = _make_fan(_make_coordinator_data(manual_speed_selected=False))
+        assert fan.speed_count == len(FAN_SPEEDS)
+
+        fan._attr_preset_mode = PRESET_MODE_MANUAL
+        assert fan.speed_count == 100
+
+        fan._attr_preset_mode = PRESET_MODE_ON
+        fan.coordinator.data["manual_speed_selected"] = True
+        assert fan.speed_count == 100

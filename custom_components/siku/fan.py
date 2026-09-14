@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from functools import cached_property
 import logging
 from typing import Any
 
@@ -102,9 +101,13 @@ class SikuFan(SikuEntity, FanEntity):
             return None
         return self._attr_percentage > 0
 
-    @cached_property
+    @property
     def speed_count(self) -> int:
-        """Return the number of speeds the fan supports."""
+        """Return the number of speeds the fan supports.
+
+        Must not be cached: HA derives the UI slider step from this value,
+        and it changes when the fan enters or leaves manual mode.
+        """
         if (
             self._attr_preset_mode == PRESET_MODE_MANUAL
             or self.coordinator.data["manual_speed_selected"]
